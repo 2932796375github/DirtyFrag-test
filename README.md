@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> If you want to use your own ksud binary, you must compile from my fork: https://github.com/diabl0w/KernelSU
+
 # DFRoot [DirtyFrag (CVE-2026-43284)]
 
 The core of this code is fully credited to others. I merely combined ideas to make them all better 

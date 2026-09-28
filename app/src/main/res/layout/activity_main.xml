@@ -49,13 +49,23 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="10dp"
-        android:layout_marginEnd="10dp"
+        android:layout_marginEnd="4dp"
         android:layout_marginTop="8dp"
         android:text="Launch Root (DirtyFrag CVE-2026-43284)"
         android:textSize="18sp"
         app:layout_constraintTop_toBottomOf="@+id/switchBootStart"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toStartOf="@+id/switchManualSoftReboot" />
+
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/switchManualSoftReboot"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="10dp"
+        android:text="Soft Reboot"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/btnRun"
+        app:layout_constraintBottom_toBottomOf="@+id/btnRun" />
 
     <ScrollView
         android:id="@+id/outputScroll"

