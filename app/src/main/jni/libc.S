@@ -16,7 +16,7 @@ lib_path:
 mod_args:
     .asciz ""
 ksud_path:
-    .asciz "/data/data/df.root/ksud"
+    .asciz "/data/user_de/0/df.root/ksud"
 logcat_path:
     .asciz "/system/bin/logcat"
 root_path:

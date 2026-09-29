@@ -18,21 +18,12 @@ android {
         }
     }
 
-    signingConfigs {
-        create("keystore") {
-            storeFile = file("keystore.jks")
-            storePassword = "dirtyfrag"
-            keyAlias = "dirtyfrag"
-            keyPassword = "dirtyfrag"
-        }
-    }
-
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("keystore")
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
-            signingConfig = signingConfigs.getByName("keystore")
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
     }

