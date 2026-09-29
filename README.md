@@ -63,10 +63,10 @@ The exploit uses this primitive to patch shellcode into `libc++.so` and `libc.so
 
 ## Usage
 
-Install the KernelSU Manager https://github.com/tiann/KernelSU/releases/tag/v3.3.0
+Install KernelSU Manager (download & unzip manager file) from actions flow: 
+https://github.com/tiann/KernelSU/actions/runs/35973514328
 
 ```sh
-./create-keystore.sh
 ./build.sh
 adb install -r dirtyfrag.apk
 ```

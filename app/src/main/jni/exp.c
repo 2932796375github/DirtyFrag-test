@@ -394,7 +394,7 @@ static int patch_ko(struct Reporter *reporter) {
     /* pick KO image */
     int andr = 0, major = 0, minor = 0;
     if (read_device_versions(&andr, &major, &minor) != 0) {
-        REPORTLN("version check failed"); return 1;
+        REPORTLN("Unable to match kernel version - possibly unsupported Non-GKI device"); return 1;
     }
     const struct KoImage *ko = select_ko_image(andr, major, minor);
     if (!ko) {
