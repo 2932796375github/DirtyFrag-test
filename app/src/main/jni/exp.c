@@ -55,7 +55,7 @@ static void reportfmt(struct Reporter *r, const char *fmt, ...) {
 #define REPORTLN(fmt, ...) reportfmt(reporter, fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 
 static const char kCrashDump[] = "/apex/com.android.runtime/bin/crash_dump64";
-static const char target_lib_path[] = "/vendor/lib64/libbinderdebug.so";
+static char target_lib_path[256] = "/vendor/lib64/libbinderdebug.so";
 
 /* SA parameters set by Java via nativeRunAll() before any patching. */
 static int      g_encap_port;
@@ -380,6 +380,16 @@ static char *pad16(const char *data, size_t len, size_t *out_len) {
     return buf;
 }
 
+JNIEXPORT void JNICALL
+Java_df_root_MainActivity_nativeSetKoTarget(JNIEnv *env, jclass clz __attribute__((unused)),
+                                            jstring path) {
+    const char *p = (*env)->GetStringUTFChars(env, path, NULL);
+    if (p) {
+        snprintf(target_lib_path, sizeof(target_lib_path), "%s", p);
+        (*env)->ReleaseStringUTFChars(env, path, p);
+    }
+}
+
 static int patch_ko(struct Reporter *reporter) {
     /* pick KO image */
     int andr = 0, major = 0, minor = 0;
@@ -412,7 +422,7 @@ static int patch_ko(struct Reporter *reporter) {
     if (!ko_buf) return -1;
 
     /* patch #2: write KO into vendor lib via crash_dump bridge */
-    REPORTLN("* patch #2 (libbinderdebug.so ← dirtyfrag.ko, %zu bytes)", ko_len_padded);
+    REPORTLN("* patch #2 (%s ← dirtyfrag.ko, %zu bytes)", target_lib_path, ko_len_padded);
     ret = patch_file_cbc(target_lib_path, ko_buf, ko_len_padded, 0, 1, reporter);
     free(ko_buf);
     if (ret) REPORTLN("patch #2 failed: %d", ret);
