@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.AttributeSet;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 
@@ -19,9 +20,9 @@ public class OneUiSwitch extends View {
     private static final float TRACK_W = 46f, TRACK_H = 28f;
     private static final float THUMB_D = 21f, MARGIN = 3.5f;
 
-    // Colors
+    // Colors (strictly neutral grey - monochrome UI)
     private static final int ON_TRACK = 0xFFC9C9C9,  ON_THUMB = 0xFF141414;
-    private static final int OFF_TRACK = 0xFF2E2E30, OFF_THUMB = 0xFF8E8E8E;
+    private static final int OFF_TRACK = 0xFF2E2E2E, OFF_THUMB = 0xFF8E8E8E;
 
     private static final long ANIM_MS = 160;
 
@@ -83,6 +84,7 @@ public class OneUiSwitch extends View {
     @Override
     public boolean performClick() {
         if (!enabledState) return false;
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         boolean next = !checked;
         setChecked(next);
         if (listener != null) listener.onCheckedChanged(this, next);

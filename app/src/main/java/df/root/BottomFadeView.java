@@ -18,14 +18,15 @@ public class BottomFadeView extends View {
 
     private final Paint paint = new Paint();
 
-    // Fade curve: transparent -> 20% at 45% height -> 80% at 75% -> solid.
+    // Fade curve: transparent -> 40% at 32% -> 90% at 60% -> solid from 82%.
     private static final int[] COLORS = {
             0x00000000,
-            0x33000000,
-            0xCC000000,
+            0x66000000,
+            0xE6000000,
+            0xFF000000,
             0xFF000000
     };
-    private static final float[] POSITIONS = {0f, 0.45f, 0.75f, 1f};
+    private static final float[] POSITIONS = {0f, 0.32f, 0.60f, 0.82f, 1f};
 
     public BottomFadeView(Context context) {
         super(context);

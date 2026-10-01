@@ -20,9 +20,35 @@
             android:layout_height="56dp"
             app:title="DirtyFrag"
             app:titleMarginStart="32dp"
-            app:titleTextAppearance="@style/ToolbarTitle" />
+            app:titleTextAppearance="@style/ToolbarTitle">
+
+            <!-- OneUI-style overflow button: grey circle, right edge aligned
+                 with the card toggles below (32dp from screen edge). -->
+            <ImageButton
+                android:id="@+id/btnMenu"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="16dp"
+                android:background="@drawable/bg_circle"
+                android:contentDescription="Menu"
+                android:scaleType="center"
+                android:src="@drawable/ic_more" />
+
+        </com.google.android.material.appbar.MaterialToolbar>
 
     </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Invisible anchor for the popup menu: sits a bit right of and below
+         the circle button, so the popup overlaps the card below. -->
+    <View
+        android:id="@+id/menuAnchor"
+        android:layout_width="8dp"
+        android:layout_height="2dp"
+        android:layout_marginTop="0dp"
+        android:layout_marginEnd="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/appBarLayout" />
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardBoot"
@@ -62,6 +88,7 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/tvAutorunTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="Autorun"
@@ -69,6 +96,7 @@
                         android:textSize="16sp" />
 
                     <TextView
+                        android:id="@+id/tvAutorunDesc"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="Runs the exploit after boot"
@@ -100,6 +128,7 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/tvRebootTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="Auto reboot"
@@ -107,6 +136,7 @@
                         android:textSize="16sp" />
 
                     <TextView
+                        android:id="@+id/tvRebootDesc"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="Soft reboots after root (Use with caution)"
@@ -127,6 +157,64 @@
 
     </com.google.android.material.card.MaterialCardView>
 
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardLog"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="12dp"
+        app:cardBackgroundColor="#FF1C1C1C"
+        app:cardCornerRadius="26dp"
+        app:strokeWidth="0dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/cardBoot">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical"
+                android:orientation="vertical"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Show advanced log"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Shows full log in addition to simple status"
+                    android:textColor="#FF9E9E9E"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
+
+            <df.root.OneUiSwitch
+                android:id="@+id/switchAdvancedLog"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
     <ScrollView
         android:id="@+id/outputScroll"
         android:layout_width="0dp"
@@ -139,14 +227,14 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/cardBoot">
+        app:layout_constraintTop_toBottomOf="@+id/cardLog">
 
         <TextView
             android:id="@+id/outputView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="#FFB3B3B3"
-            android:textIsSelectable="true"
+            android:textIsSelectable="false"
             android:textSize="11sp" />
 
     </ScrollView>
@@ -165,24 +253,45 @@
         app:iconSize="22dp"
         app:iconTint="#FFC9C9C9"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/cardBoot" />
+        app:layout_constraintTop_toBottomOf="@+id/cardLog" />
 
     <!-- OneUI-style bottom fade over the log -->
     <df.root.BottomFadeView
         android:id="@+id/bottomFade"
         android:layout_width="0dp"
-        android:layout_height="280dp"
+        android:layout_height="400dp"
         android:clickable="false"
         android:focusable="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
+    <!-- OneUI-update-style two-step progress bar -->
+    <df.root.TwoStepProgressView
+        android:id="@+id/twoStep"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="6dp"
+        app:layout_constraintBottom_toTopOf="@+id/btnRun"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Left-edge anchor for the pill: (1-0.48)/2 = 26% — the fresh pill's
+         left edge, which must never move during the shrink animation. -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/glPillStart"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.26" />
+
     <!-- OneUI search-bar style floating pill -->
     <Button
         android:id="@+id/btnRun"
         android:layout_width="0dp"
-        android:layout_height="60dp"
+        android:layout_height="54dp"
         android:layout_marginBottom="28dp"
         android:insetTop="0dp"
         android:insetBottom="0dp"
@@ -191,14 +300,49 @@
         android:elevation="12dp"
         android:stateListAnimator="@null"
         android:text="Run exploit"
-        android:textSize="19sp"
-        android:backgroundTint="#FF262626"
-        android:textColor="#FFC9C9C9"
+        android:textSize="16sp"
+        android:backgroundTint="#FF7A7A7A"
+        android:textColor="#FFE0E0E0"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constraintStart_toStartOf="@+id/glPillStart"
+        app:layout_constraintWidth_percent="0.48"
+        app:strokeWidth="0.5dp"
+        app:strokeColor="#FFA6A6A6" />
+
+    <!-- KSU launcher circle: pops up next to the pill while running/rooted,
+         lights up once root is successful. -->
+    <ImageButton
+        android:id="@+id/btnKsu"
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginBottom="28dp"
+        android:background="@drawable/bg_circle"
+        android:backgroundTint="#FF2E2E30"
+        android:contentDescription="Open KernelSU"
+        android:elevation="12dp"
+        android:enabled="false"
+        android:scaleType="centerInside"
+        android:src="@drawable/ksu_logo"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constraintStart_toEndOf="@+id/btnRun" />
+
+    <!-- Dim overlay: darkens the app 50% while the submenu is visible. -->
+    <View
+        android:id="@+id/dimOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/black"
+        android:elevation="30dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintWidth_percent="0.56"
-        app:strokeWidth="0.5dp"
-        app:strokeColor="#33FFFFFF" />
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,4 +1,6 @@
 <resources>
+    <!-- v31+: kill the system splash-screen icon - plain black, so the app
+         contents appear as soon as the window shows. -->
     <style name="Theme.DirtyFrag" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
         <item name="android:fontFamily">@font/inter</item>
         <item name="fontFamily">@font/inter</item>
@@ -25,36 +27,7 @@
         <item name="listPreferredItemHeightSmall">56dp</item>
         <item name="listPreferredItemPaddingLeft">12dp</item>
         <item name="listPreferredItemPaddingRight">12dp</item>
-    </style>
-    <style name="DF_MenuText" parent="TextAppearance.AppCompat">
-        <item name="android:textSize">15sp</item>
-        <item name="android:textColor">#FFE8E8E8</item>
-        <item name="android:gravity">center</item>
-    </style>
-    <style name="ShapeCircle">
-        <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">50%</item>
-    </style>
-    <style name="DF_PopupMenu" parent="Widget.Material3.PopupMenu">
-        <item name="android:popupBackground">@drawable/popup_bg</item>
-        <item name="android:popupElevation">24dp</item>
-    </style>
-    <style name="DF_OverflowMenu" parent="Widget.Material3.PopupMenu.Overflow">
-        <item name="android:popupBackground">@drawable/popup_bg</item>
-        <item name="android:popupElevation">24dp</item>
-    </style>
-    <style name="DF_DropDownListView" parent="Widget.AppCompat.ListView.DropDown">
-        <item name="android:divider">@drawable/menu_divider</item>
-        <item name="android:dividerHeight">1dp</item>
-        <item name="android:listSelector">@drawable/menu_item_ripple</item>
-    </style>
-    <!-- OneUI-style bold toolbar title -->
-    <style name="ToolbarTitle" parent="TextAppearance.Material3.TitleLarge">
-        <item name="android:fontFamily">@font/inter</item>
-        <item name="fontFamily">@font/inter</item>
-        <item name="android:textFontWeight">700</item>
-        <item name="android:textSize">24sp</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:textColor">@color/white</item>
+        <item name="android:windowSplashScreenBackground">@android:color/transparent</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
     </style>
 </resources>

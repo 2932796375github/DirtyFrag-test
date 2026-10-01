@@ -17,8 +17,11 @@ import android.text.style.ForegroundColorSpan;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.StyleSpan;
 import android.util.Log;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.core.content.res.ResourcesCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -40,27 +43,41 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     private final Executor mExec = Executors.newSingleThreadExecutor();
     private final StringBuilder logBuffer = new StringBuilder();
     private File lastLogFile;
+    private boolean running;
+    private boolean runArmed;
+    private boolean advancedLog;
+    private boolean expertMode;
+    private String exploitPhase = "";
+    private int cleanupSteps;
+    private float seg1;
+    private float pillPercent = 0.48f;
 
     @Override
     public void report(String msg) {
         Log.i(TAG, msg.trim());
         mMain.post(() -> {
+            // Drive the two-step progress bar from the raw (unfiltered) lines.
+            for (String line : msg.split("\n", -1)) {
+                driveProgress(line.trim());
+            }
             for (String line : msg.split("\n", -1)) {
                 String t = line.trim();
                 // Skip empty lines to keep the log compact.
                 if (t.isEmpty()) {
                     continue;
                 }
-                // Drop byte-progress counters ("0 …", "512 …", ...).
-                if (t.matches("\\d+\\s*(…|\\.{3})?")) {
+                // Drop byte-progress counters ("0 ?", "512 ?", ...).
+                if (t.matches("\\d+\\s*(\\u2026|\\.{3})?")) {
                     continue;
                 }
-                // Drop internal patch/hook details.
-                if (t.contains("hook=") || t.matches("\\*+SUCCESS\\*+")) {
+                // Drop internal patch/hook details and result headers.
+                if (t.contains("hook=") || t.matches("\\*+SUCCESS\\*+")
+                        || t.contains("exploit success")) {
                     continue;
                 }
                 // Strip hex file offsets: ".../libc.so+0x6e8b0" -> ".../libc.so"
                 t = t.replaceAll("\\+0x[0-9a-fA-F]+$", "");
+                t = stripHeader(t);
                 appendLog(t);
             }
             binding.outputScroll.post(() -> binding.outputScroll.fullScroll(View.FOCUS_DOWN));
@@ -74,10 +91,104 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         saveLog();
     }
 
-    /** Section headers ("=== x ===") render big, white and bold; the rest is dimmed. */
+    /** Translates raw native log lines into two-step progress-bar states. */
+    private void driveProgress(String t) {
+        if (t.isEmpty()) return;
+        switch (t) {
+            case "=== setup ===":
+                exploitPhase = "setup";
+                setSeg1(0.05f);
+                break;
+            case "=== exploit ===":
+                exploitPhase = "exploit";
+                setSeg1(0.15f);
+                break;
+            case "=== cleanup ===":
+                exploitPhase = "cleanup";
+                cleanupSteps = 0;
+                setSeg1(1f);
+                setSeg2(0.05f, "Verification", 0xFFFFFFFF);
+                break;
+            default:
+                break;
+        }
+        if (exploitPhase.equals("setup") && t.startsWith("ksud staged")) {
+            setSeg1(0.10f);
+        }
+        if (exploitPhase.equals("exploit") && t.startsWith("patched")) {
+            if (t.contains("crash_dump64")) {
+                setSeg1(0.30f);
+            } else if (t.contains("libbinderdebug")) {
+                setSeg1(0.55f);
+            } else if (t.contains("libc++.so")) {
+                setSeg1(Math.min(0.80f, seg1 + 0.05f));
+            }
+        }
+        if (t.startsWith("* triggering")) {
+            setSeg1(0.85f);
+        }
+        if (t.startsWith("libc++: mutex acquired")) {
+            setSeg1(0.95f);
+        }
+        if (exploitPhase.equals("cleanup")
+                && (t.startsWith("* restore") || t.startsWith("* cache dropped"))) {
+            cleanupSteps++;
+            setSeg2(Math.min(1f, cleanupSteps / 3f), "Verification", 0xFFFFFFFF);
+        }
+    }
+
+    private void setSeg1(float p) {
+        seg1 = p;
+        binding.twoStep.setSeg1(p, Math.round(p * 100) + "%");
+    }
+
+    private void setSeg2(float p, String label, int color) {
+        binding.twoStep.setSeg2(p, label, color);
+    }
+
+    /** Visibility of log / share button / progress bar, composed from the
+     *  advanced-log setting and whether any run data exists. */
+    private void updateLogVisibility() {
+        boolean hasRun = logBuffer.length() > 0
+                || (lastLogFile != null && lastLogFile.exists());
+        boolean showLog = advancedLog && hasRun;
+        binding.outputScroll.setVisibility(showLog ? View.VISIBLE : View.GONE);
+        binding.btnShareLog.setVisibility(showLog ? View.VISIBLE : View.GONE);
+        // Progress bar is the simple status: always visible.
+    }
+
+    /** "=== setup ===" -> "SETUP"; "=== exploit failed: x ===" -> "EXPLOIT FAILED: X". */
+    private static String stripHeader(String t) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^===\\s*(.*?)\\s*===$").matcher(t);
+        return m.matches() ? m.group(1).toUpperCase() : t;
+    }
+
+    /** Short firmware token from the build display string, e.g. "S931BXXU1AYB2"
+     *  - everything that is not the model-prefixed version is dropped. */
+    private static String fwToken() {
+        String d = android.os.Build.DISPLAY;
+        String model = android.os.Build.MODEL == null
+                ? "" : android.os.Build.MODEL.replace("SM-", "").trim();
+        if (d == null || d.trim().isEmpty()) return "UNKNOWN";
+        if (model.isEmpty()) return d.trim();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("[A-Z0-9]*" + java.util.regex.Pattern.quote(model) + "[A-Z0-9]*")
+                .matcher(d);
+        return m.find() ? m.group() : d.trim();
+    }
+
+    /** Header lines render big, white and bold; the rest is dimmed. */
+    private boolean isHeader(String line) {
+        return line.equals("SETUP") || line.equals("EXPLOIT") || line.equals("CLEANUP")
+                || line.startsWith("EXPLOIT FAILED")
+                || line.equals(fwToken());
+    }
+
+    /** Header lines render big, white and bold; the rest is dimmed. */
     private CharSequence styleLogLine(String line) {
         SpannableString ss = new SpannableString(line);
-        if (line.startsWith("===") && line.endsWith("===")) {
+        if (isHeader(line)) {
             ss.setSpan(new StyleSpan(Typeface.BOLD), 0, line.length(), 0);
             ss.setSpan(new RelativeSizeSpan(1.3f), 0, line.length(), 0);
             ss.setSpan(new ForegroundColorSpan(0xFFFFFFFF), 0, line.length(), 0);
@@ -135,6 +246,21 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         super.onCreate(savedInstanceState);
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        // Version tag flowing right after the header title.
+        SpannableString title = new SpannableString("DirtyFrag  1.05");
+        title.setSpan(new RelativeSizeSpan(0.45f), 9, title.length(), 0);
+        title.setSpan(new ForegroundColorSpan(0x8AFFFFFF), 9, title.length(), 0);
+        // Drop the version to the bottom edge of the letters (descender line).
+        title.setSpan(new android.text.style.MetricAffectingSpan() {
+            @Override public void updateMeasureState(android.text.TextPaint p) {
+                p.baselineShift += (int) (0.55f * p.getTextSize());
+            }
+            @Override public void updateDrawState(android.text.TextPaint p) {
+                p.baselineShift += (int) (0.55f * p.getTextSize());
+            }
+        }, 9, title.length(), 0);
+        binding.toolbar.setTitle(title);
         // NOTE: no setSupportActionBar() - it makes the ActionBar delegate draw
         // the title and ignore the toolbar's titleTextAppearance (breaks bold).
         // The toolbar renders its own title via app:titleTextAppearance.
@@ -164,33 +290,291 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 .getSharedPreferences("dfroot", MODE_PRIVATE).getInt("log_boot_count", -1);
         if (lastLogFile.exists() && savedBoot != bootCount()) {
             lastLogFile.delete();
+            createDeviceProtectedStorageContext()
+                    .getSharedPreferences("dfroot", MODE_PRIVATE)
+                    .edit().putBoolean("last_run_success", false).apply();
         }
         String last = readLastLog();
         boolean hasLastLog = !last.isEmpty();
         if (hasLastLog) {
-            appendLog("=== last run ===");
+            appendLog(fwToken());
             for (String l : last.split("\n")) {
-                String t = l.trim();
-                // Skip old headers - they were saved by previous app opens.
-                if (t.isEmpty() || t.equals("=== last run ===")) continue;
+                String t = stripHeader(l.trim());
+                // Skip stale headers, old result lines and duplicate fw lines.
+                if (t.isEmpty()
+                        || t.equals("LAST RUN")
+                        || t.equals("EXPLOIT SUCCESS")
+                        || t.equals(fwToken())) {
+                    continue;
+                }
                 appendLog(t);
             }
         }
-        binding.outputScroll.setVisibility(hasLastLog ? View.VISIBLE : View.GONE);
-        binding.btnShareLog.setVisibility(hasLastLog ? View.VISIBLE : View.GONE);
+
+        // Advanced log toggle: full log vs. simple status (progress bar only).
+        advancedLog = createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getBoolean("advanced_log", false);
+        binding.switchAdvancedLog.setChecked(advancedLog);
+        binding.switchAdvancedLog.setOnCheckedChangeListener((btn, checked) -> {
+            advancedLog = checked;
+            createDeviceProtectedStorageContext()
+                    .getSharedPreferences("dfroot", MODE_PRIVATE)
+                    .edit().putBoolean("advanced_log", checked).apply();
+            updateLogVisibility();
+        });
+        updateLogVisibility();
+
+        // Restore the simple status for the current state: rooted device or a
+        // successful last run -> 100% + Verified; failed run -> Failed.
+        boolean rootedNow = new File("/dev/df").exists();
+        boolean lastSuccess = hasLastLog
+                && createDeviceProtectedStorageContext()
+                        .getSharedPreferences("dfroot", MODE_PRIVATE)
+                        .getBoolean("last_run_success", false);
+        boolean lastFailed = hasLastLog
+                && last.toLowerCase().contains("=== exploit failed");
+        if (rootedNow || lastSuccess) {
+            binding.twoStep.setSeg1(1f, "100%");
+            binding.twoStep.setSeg2(1f, "Verified", 0xFFFFFFFF);
+        } else if (lastFailed) {
+            binding.twoStep.setSeg2(1f, "Failed", 0xFFE57373);
+        }
 
         binding.btnRun.setOnClickListener(v -> {
+            if (running) return;
+            // Two-tap confirmation: first tap arms ("Are you sure"), second runs.
+            if (!runArmed) {
+                runArmed = true;
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                binding.btnRun.setText("Are you sure");
+                return;
+            }
+            runArmed = false;
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            running = true;
             binding.btnRun.setEnabled(false);
+            binding.btnRun.setText("Running");
+            // Same dark greyed-out styling as the Rooted state.
+            binding.btnRun.setTextColor(0xFF6E6E6E);
+            binding.btnRun.setBackgroundTintList(ColorStateList.valueOf(0xFF1F1F1F));
+            ((com.google.android.material.button.MaterialButton) binding.btnRun)
+                    .setStrokeColor(ColorStateList.valueOf(0xFF1F1F1F));
             binding.outputView.setText("");
             logBuffer.setLength(0);
             if (lastLogFile.exists()) lastLogFile.delete();
-            binding.outputScroll.setVisibility(View.VISIBLE);
-            binding.btnShareLog.setVisibility(View.VISIBLE);
+            createDeviceProtectedStorageContext()
+                    .getSharedPreferences("dfroot", MODE_PRIVATE)
+                    .edit().putBoolean("last_run_success", false).apply();
+            appendLog(fwToken());
+            binding.twoStep.reset();
+            setCompactButton(true, false);
+            updateLogVisibility();
             mExec.execute(() -> runExploit(false));
+        });
+
+        binding.btnKsu.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            openKsu();
+        });
+
+        // Subtle push-in + keyboard-tap haptic on the run button.
+        binding.btnRun.setOnTouchListener((v, ev) -> {
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(80).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                    break;
+                default:
+                    break;
+            }
+            return false;
         });
 
         binding.btnShareLog.setOnClickListener(v -> shareLog());
 
+        // Overflow menu on the custom grey-circle button: the popup closes
+        // ONLY on outside taps, so multi-tap actions are possible.
+        binding.btnMenu.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            float md = getResources().getDisplayMetrics().density;
+            boolean rootedMenu = new File("/dev/df").exists();
+            final android.widget.PopupWindow[] pwRef = {null};
+
+            android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+            box.setOrientation(android.widget.LinearLayout.VERTICAL);
+            box.setBackgroundResource(R.drawable.popup_bg);
+            box.setPadding(0, (int) (6 * md), 0, (int) (6 * md));
+
+            // -- Github Page row --
+            TextView ghRow = new TextView(this);
+            ghRow.setBackgroundResource(R.drawable.menu_row_highlight);
+            ghRow.setText("Github Page");
+            ghRow.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
+            ghRow.setPadding((int) (20 * md), 0, 0, 0);
+            ghRow.setTextColor(0xFFE8E8E8);
+            ghRow.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15);
+            ghRow.setOnClickListener(v2 -> {
+                v2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                openUrl("https://github.com/mitschud/DirtyFrag");
+            });
+            box.addView(ghRow, new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, (int) (46 * md)));
+
+            // -- Expert Mode row: white dot appears when enabled --
+            android.widget.LinearLayout exRow = new android.widget.LinearLayout(this);
+            exRow.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
+            exRow.setPadding((int) (20 * md), 0, 0, 0);
+            TextView exText = new TextView(this);
+            exRow.setBackgroundResource(R.drawable.menu_row_highlight);
+            exText.setText("Expert Mode");
+            exText.setTextColor(0xFFE8E8E8);
+            exText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15);
+            exRow.addView(exText);
+            final android.view.View[] dotRef = {null};
+            android.view.View dot = new android.view.View(this);
+            dot.setBackgroundResource(R.drawable.dot_white);
+            android.widget.LinearLayout.LayoutParams dotLp =
+                    new android.widget.LinearLayout.LayoutParams(
+                            (int) (7 * md), (int) (7 * md));
+            dotLp.setMargins((int) (7 * md), 0, 0, 0);
+            dot.setVisibility(expertMode ? View.VISIBLE : View.GONE);
+            exRow.addView(dot, dotLp);
+            dotRef[0] = dot;
+            exRow.setOnClickListener(v2 -> {
+                v2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                expertMode = !expertMode;
+                createDeviceProtectedStorageContext()
+                        .getSharedPreferences("dfroot", MODE_PRIVATE)
+                        .edit().putBoolean("expert_mode", expertMode).apply();
+                applyExpertMode();
+                if (dotRef[0] != null)
+                    dotRef[0].setVisibility(expertMode ? View.VISIBLE : View.GONE);
+            });
+            box.addView(exRow, new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, (int) (46 * md)));
+
+            // -- Remove KSU/KSUD row: 3-tap confirm, greyed without root --
+            android.widget.LinearLayout rmCol = new android.widget.LinearLayout(this);
+            rmCol.setOrientation(android.widget.LinearLayout.VERTICAL);
+            rmCol.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
+            rmCol.setPadding((int) (20 * md), 0, (int) (20 * md), 0);
+            TextView rmTitle = new TextView(this);
+            rmCol.setBackgroundResource(R.drawable.menu_row_highlight);
+            rmTitle.setText("Remove KSU/KSUD");
+            rmTitle.setGravity(android.view.Gravity.START);
+            rmTitle.setTextColor(rootedMenu ? 0xFFE8E8E8 : 0xFF6E6E6E);
+            rmTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15);
+            rmCol.addView(rmTitle);
+            TextView rmSub = new TextView(this);
+            rmSub.setText(rootedMenu ? "Click 3 times" : "Requires root");
+            rmSub.setGravity(android.view.Gravity.START);
+            rmSub.setTextColor(rootedMenu ? 0xFF8E8E8E : 0xFF5A5A5A);
+            rmSub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11);
+            rmCol.addView(rmSub);
+            final int[] taps = {0};
+            rmCol.setOnClickListener(v2 -> {
+                if (!rootedMenu) return;
+                v2.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                taps[0]++;
+                if (taps[0] == 1) {
+                    rmTitle.setText("Are you sure");
+                    rmSub.setText("Click 2 times");
+                    return;
+                }
+                if (taps[0] == 2) {
+                    rmTitle.setText("One more click");
+                    rmSub.setText("Click 1 time");
+                    return;
+                }
+                if (pwRef[0] != null) pwRef[0].dismiss();
+                try {
+                    Process p = Runtime.getRuntime().exec(new String[]{
+                            "su", "-c",
+                            "/data/user_de/0/df.root/ksud uninstall; "
+                                    + "rm -rf /data/adb/ksu /data/adb/ksud"
+                                    + " /data/adb/post-fs-data.d"
+                                    + " /data/adb/modules_update"
+                                    + " /data/adb/modules /data/adb/ksu.bk; "
+                                    + "rm -f /data/user_de/0/df.root/ksud"});
+                    int rc = p.waitFor();
+                    mMain.post(() -> {
+                        Toast.makeText(MainActivity.this,
+                                rc == 0 ? "KSU/KSUD removed"
+                                        : "Removal failed (code " + rc + ")",
+                                Toast.LENGTH_SHORT).show();
+                        setRootedState(false);
+                    });
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this,
+                            "su not available", Toast.LENGTH_SHORT).show();
+                }
+            });
+            box.addView(rmCol, new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, (int) (58 * md)));
+
+            // Width: content, but at least 210dp so the popup reads properly.
+            box.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+            int pw_w = Math.max(box.getMeasuredWidth(), (int) (190 * md));
+
+            final android.widget.PopupWindow pw = new android.widget.PopupWindow(box,
+                    pw_w, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+                    android.graphics.Color.TRANSPARENT));
+            pw.setOutsideTouchable(true);
+            pwRef[0] = pw;
+            pw.setOnDismissListener(() ->
+                    binding.dimOverlay.animate().alpha(0f).setDuration(150)
+                            .withEndAction(() -> binding.dimOverlay
+                                    .setVisibility(View.GONE)).start());
+
+            // Centered separators between the rows.
+            android.widget.LinearLayout.LayoutParams sepLp =
+                    new android.widget.LinearLayout.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int) md));
+            sepLp.setMargins((int) (20 * md), 0, (int) (20 * md), 0);
+            android.view.View sep1 = new android.view.View(this);
+            sep1.setBackgroundColor(0xFF3F3F3F);
+            box.addView(sep1, 1, sepLp);
+            android.view.View sep2 = new android.view.View(this);
+            sep2.setBackgroundColor(0xFF3F3F3F);
+            android.widget.LinearLayout.LayoutParams sep2Lp =
+                    new android.widget.LinearLayout.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int) md));
+            sep2Lp.setMargins((int) (20 * md), 0, (int) (20 * md), 0);
+            box.addView(sep2, 3, sep2Lp);
+
+            box.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, android.graphics.Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), 26 * md);
+                }
+            });
+            box.setClipToOutline(true);
+            box.setElevation(48 * md);
+
+            int[] loc = new int[2];
+            binding.menuAnchor.getLocationOnScreen(loc);
+            int x = loc[0] + binding.menuAnchor.getWidth() - pw_w;
+            int y = loc[1] + (int) (2 * md);
+            binding.dimOverlay.setVisibility(View.VISIBLE);
+            binding.dimOverlay.setAlpha(0f);
+            binding.dimOverlay.animate().alpha(0.5f).setDuration(150).start();
+            box.setPivotX(pw_w);
+            box.setPivotY(0f);
+            box.setScaleX(0.85f);
+            box.setScaleY(0.9f);
+            box.setAlpha(0f);
+            pw.showAtLocation(binding.menuAnchor,
+                    android.view.Gravity.TOP | android.view.Gravity.START, x, y);
+            box.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
+                    .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                    .start();
+        });
         ComponentName bootReceiver = new ComponentName(this, BootReceiver.class);
         int state = getPackageManager().getComponentEnabledSetting(bootReceiver);
         boolean bootEnabled = state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
@@ -212,6 +596,27 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             createDeviceProtectedStorageContext()
                 .getSharedPreferences("dfroot", MODE_PRIVATE)
                 .edit().putBoolean("auto_soft_reboot", checked).apply());
+
+        // Expert mode gates the autorun card: locked until toggled in the menu.
+        expertMode = createDeviceProtectedStorageContext()
+                .getSharedPreferences("dfroot", MODE_PRIVATE)
+                .getBoolean("expert_mode", false);
+        applyExpertMode();
+    }
+
+    /** Expert mode off: the autorun card is inaccessible - greyed text and
+     *  disabled toggles, titles suffixed with (Expert). */
+    private void applyExpertMode() {
+        boolean ok = expertMode;
+        binding.tvAutorunTitle.setText(ok ? "Autorun" : "Autorun (Expert)");
+        binding.tvRebootTitle.setText(ok ? "Auto reboot" : "Auto reboot (Expert)");
+        binding.tvAutorunTitle.setTextColor(ok ? 0xFFFFFFFF : 0xFF6E6E6E);
+        binding.tvAutorunDesc.setTextColor(ok ? 0xFF9E9E9E : 0xFF5A5A5A);
+        binding.tvRebootTitle.setTextColor(ok ? 0xFFFFFFFF : 0xFF6E6E6E);
+        binding.tvRebootDesc.setTextColor(ok ? 0xFF9E9E9E : 0xFF5A5A5A);
+        binding.switchBootStart.setEnabled(ok);
+        binding.switchAutoSoftReboot.setEnabled(ok
+                && binding.switchBootStart.isChecked());
     }
 
     private void setRootedState() {
@@ -219,15 +624,111 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     }
 
     private void setRootedState(boolean rooted) {
+        runArmed = false;
         binding.btnRun.setEnabled(!rooted);
         binding.btnRun.setText(rooted ? "Rooted" : "Run exploit");
         binding.btnRun.setTextColor(
-                rooted ? 0xFF6E6E6E : 0xFFC9C9C9);
+                rooted ? 0xFF6E6E6E : 0xFFE0E0E0);
         binding.btnRun.setBackgroundTintList(ColorStateList.valueOf(
-                rooted ? 0xFF1F1F1F : 0xFF262626));
+                rooted ? 0xFF1F1F1F : 0xFF7A7A7A));
         ((com.google.android.material.button.MaterialButton) binding.btnRun)
                 .setStrokeColor(ColorStateList.valueOf(
-                        rooted ? 0xFF1F1F1F : 0x33FFFFFF));
+                        rooted ? 0xFF1F1F1F : 0xFFA6A6A6));
+        // Rooted/running: shrink the pill left and pop the KSU circle next to
+        // it (lit when rooted); fresh run state: full-width pill, no circle.
+        setCompactButton(rooted, rooted);
+    }
+
+    /** Shrinks the main pill to the left and pops the KSU launcher circle
+     *  next to it (compact=true, ksuLit=lit after successful root), or
+     *  restores the full-width pill. */
+    private void setCompactButton(boolean compact, boolean ksuLit) {
+        // Fresh pill: 48% wide starting at the 26% guideline → right edge at
+        // 74%. Compact: pill + 12dp gap + 54dp circle must occupy the same
+        // 48% total (left edge pinned), so pill = 48% - extras.
+        float target = 0.48f;
+        if (compact) {
+            float parentW = ((View) binding.btnRun.getParent()).getWidth();
+            if (parentW <= 0) parentW = getResources().getDisplayMetrics().widthPixels;
+            float density = getResources().getDisplayMetrics().density;
+            float extrasPx = (12f + 54f) * density;
+            target = Math.max(0.20f, 0.48f - extrasPx / parentW);
+        }
+        android.animation.ValueAnimator a =
+                android.animation.ValueAnimator.ofFloat(pillPercent, target);
+        a.setDuration(250);
+        a.addUpdateListener(anim -> {
+            pillPercent = (float) anim.getAnimatedValue();
+            androidx.constraintlayout.widget.ConstraintLayout.LayoutParams lp =
+                    (androidx.constraintlayout.widget.ConstraintLayout.LayoutParams)
+                            binding.btnRun.getLayoutParams();
+            lp.matchConstraintPercentWidth = pillPercent;
+            binding.btnRun.setLayoutParams(lp);
+        });
+        a.start();
+        binding.btnKsu.setEnabled(ksuLit);
+        boolean wasVisible = binding.btnKsu.getVisibility() == View.VISIBLE
+                && binding.btnKsu.getAlpha() > 0.99f;
+        binding.btnKsu.setBackgroundTintList(ColorStateList.valueOf(
+                ksuLit ? 0xFFB0B0B0 : 0xFF1F1F1F));
+        binding.btnKsu.setImageResource(R.drawable.ksu_logo);
+        if (compact && !wasVisible) {
+            // First appearance: pop in quickly.
+            binding.btnKsu.setVisibility(View.VISIBLE);
+            binding.btnKsu.setAlpha(0f);
+            binding.btnKsu.setScaleX(0.6f);
+            binding.btnKsu.setScaleY(0.6f);
+            binding.btnKsu.postDelayed(() -> binding.btnKsu.animate()
+                    .alpha(1f).scaleX(1f).scaleY(1f).setDuration(180)
+                    .withEndAction(() -> settleKsuTint(ksuLit)).start(), 150);
+        } else if (compact) {
+            // Already visible (state change): stay in place, just recolor.
+            settleKsuTint(ksuLit);
+        } else {
+            binding.btnKsu.animate().alpha(0f).scaleX(0.6f).scaleY(0.6f)
+                    .setDuration(200)
+                    .withEndAction(() -> binding.btnKsu.setVisibility(View.GONE))
+                    .start();
+        }
+    }
+
+    /** After the lit circle settles, ease it slightly towards grey. */
+    private void settleKsuTint(boolean ksuLit) {
+        if (!ksuLit) return;
+        android.animation.ValueAnimator g =
+                android.animation.ValueAnimator.ofFloat(0f, 1f);
+        g.setStartDelay(250);
+        g.setDuration(300);
+        g.addUpdateListener(anim -> binding.btnKsu
+                .setBackgroundTintList(ColorStateList.valueOf(
+                        mixColor(0xFFB0B0B0, 0xFF9A9A9E,
+                                (float) anim.getAnimatedValue()))));
+        g.start();
+    }
+
+    private void openKsu() {
+        // Try the known manager packages: official KernelSU, KernelSU-Next, APatch.
+        String[] candidates = {
+                "me.weishu.kernelsu", "com.rifsxd.ksunext", "me.bmax.apatch"};
+        PackageManager pm = getPackageManager();
+        for (String pkg : candidates) {
+            Intent launch = pm.getLaunchIntentForPackage(pkg);
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(launch);
+                return;
+            }
+        }
+        Toast.makeText(this, "KernelSU manager not found", Toast.LENGTH_SHORT).show();
+    }
+
+    private static int mixColor(int a, int b, float t) {
+        int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+        int br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return 0xFF000000
+                | (Math.round(ar + (br - ar) * t) << 16)
+                | (Math.round(ag + (bg - ag) * t) << 8)
+                | Math.round(ab + (bb - ab) * t);
     }
 
     /** Saves the current log to Downloads and opens the Downloads screen. */
@@ -263,14 +764,32 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             if (rc != 0) {
                 String why = rc == 1 ? "ksud exited with error" : "check logs";
                 report("\n=== exploit failed: " + why + " ===\n");
-            } else {
-                report("\n=== exploit success ===\n");
             }
+            createDeviceProtectedStorageContext()
+                    .getSharedPreferences("dfroot", MODE_PRIVATE)
+                    .edit().putBoolean("last_run_success", rc == 0).apply();
         } catch (Exception e) {
             Log.e(TAG, "exploit exception", e);
             report("\nexception: " + e + "\n");
         } finally {
-            mMain.post(() -> setRootedState(new File("/dev/df").exists()));
+            mMain.post(() -> {
+                running = false;
+                boolean rooted = new File("/dev/df").exists();
+                setRootedState(rooted);
+                binding.twoStep.setSeg2(1f,
+                        rooted ? "Verified" : "Failed",
+                        rooted ? 0xFFFFFFFF : 0xFFE57373);
+                updateLogVisibility();
+            });
         }
     }
+
+    private void openUrl(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            Toast.makeText(this, "No browser found", Toast.LENGTH_SHORT).show();
+        }
+    }
+
 }

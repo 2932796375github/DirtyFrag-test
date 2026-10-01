@@ -31,6 +31,12 @@ public class BootReceiver extends BroadcastReceiver implements IReporter {
         }
         Log.i(TAG, "boot: " + intent.getAction());
         final Context deCtx = context.createDeviceProtectedStorageContext();
+        boolean expert = deCtx.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
+                .getBoolean("expert_mode", false);
+        if (!expert) {
+            Log.i(TAG, "boot: expert mode off - autorun skipped");
+            return;
+        }
         boolean autoSoftReboot = deCtx.getSharedPreferences("dfroot", Context.MODE_PRIVATE)
                 .getBoolean("auto_soft_reboot", false);
 
