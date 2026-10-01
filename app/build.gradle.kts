@@ -10,21 +10,35 @@ android {
         applicationId = "df.root"
         minSdk = 32
         targetSdk = 36
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 11
+        versionName = "2.9"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
     }
 
+    signingConfigs {
+        create("keystore") {
+            storeFile = file("keystore.jks")
+            storePassword = "dirtyfrag"
+            keyAlias = "dirtyfrag"
+            keyPassword = "dirtyfrag"
+        }
+    }
+
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("keystore")
         }
         release {
-            signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("keystore")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 

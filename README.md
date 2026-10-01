@@ -1,15 +1,25 @@
 > [!IMPORTANT]
-> If you want to use your own ksud binary, you must compile from my fork: https://github.com/diabl0w/KernelSU
+> If you want your own ksud binary, compile from diabl0w's fork of KernelSU: https://github.com/diabl0w/KernelSU
 
-# DFRoot [DirtyFrag (CVE-2026-43284)]
+# CVE-2026-43284
 
-The core of this code is fully credited to others. I merely combined ideas to make them all better 
-and added some small improvements/features. 
+## What's changed in this fork
+
+- **OneUI-style UI rework** — OneUI look throughout: card + custom-drawn OneUI switches (constant-size thumb), OneUI-style bottom fade over the log, One UI-style floating run button (state-aware: shows "Run exploit" / disabled "Rooted")
+- **Cleaner output log** — byte counters, hook internals and native markers filtered out; styled section headers; the log of the **last run is persisted** and shown on app open, then cleared on reboot
+- **Share log button** — saves the log to `Downloads/dirtyfrag_log.txt` and opens the Downloads screen
+- **Hardened autorun** — boot-time soft reboot is a separate toggle ("Auto reboot — soft reboots after root"), **off by default**; a failed boot-time run disables autorun instead of retry-looping (protection against the RescueParty boot-loop brick reported in the field); no hidden defaults anywhere
+- **APK shrunk 14.6 MB → ~6.2 MB** via R8 minification + resource shrinking (`proguard-rules.pro`)
 
 Credits:
+- DFRoot — base of this fork: https://github.com/diabl0w/DFRoot
 - Original PoC and various code: https://github.com/lsposed/lspromise
 - Selinux Permissive kernel modules and various code: https://github.com/polygraphene/DFReroot
 - Unprivileged XFRM socket method: https://github.com/combeng6th/DirtyInit
+
+## Usage
+
+Install KernelSU (download "manager" file) from actions flow: https://github.com/tiann/KernelSU/actions/runs/35973514328
 
 ## Features
 
@@ -60,14 +70,4 @@ The exploit uses this primitive to patch shellcode into `libc++.so` and `libc.so
    - Forks and execs ksud through the bind-mounted path
 
 6. **KernelSU daemon launched** — libc/libc++ patches are restored and crash_dump64 is fadvised out of cache.
-
-## Usage
-
-Install KernelSU Manager (download & unzip manager file) from actions flow: 
-https://github.com/tiann/KernelSU/actions/runs/35973514328
-
-```sh
-./build.sh
-adb install -r dirtyfrag.apk
-```
 
