@@ -9,7 +9,6 @@
 - **Expert Mode** — autorun options are gated behind an Expert Mode toggle in the ⋮ menu (off by default)
 - **Hardened autorun** — boot-time soft reboot is a separate toggle ("Auto reboot — soft reboots after root"), **off by default**; a failed boot-time run disables autorun instead of retry-looping (protection against the RescueParty boot-loop brick reported in the field); no hidden defaults anywhere
 - **Share log button** — saves the log to `Downloads/dirtyfrag_log.txt` and opens the Downloads screen
-- **Includes diabl0w's DEFEX rework** — `task_defex_enforce` kprobe hook (address-based registration), all 8 KMI payloads rebuilt, plus run diagnostics: patch verification and readable crash_dump bridge error codes
 - **APK shrunk 14.6 MB → ~6.2 MB** via R8 minification + resource shrinking (`proguard-rules.pro`)
 
 Credits:
