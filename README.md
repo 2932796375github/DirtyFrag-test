@@ -32,7 +32,7 @@ Install KernelSU (download "manager" file) from actions flow: https://github.com
 > [!WARNING]
 > I am not responsible for any damage to your device.
 
-<img width="1080" height="2340" alt="Screenshot_20261002_003005" src="https://github.com/user-attachments/assets/b3b13f16-8cf3-44ad-bf72-b623ca55b60e" />
+<img width="540" height="1170" alt="Screenshot_20261002_003005" src="https://github.com/user-attachments/assets/b3b13f16-8cf3-44ad-bf72-b623ca55b60e" />
 
 ## Supported Devices
 
