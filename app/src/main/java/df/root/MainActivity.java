@@ -251,15 +251,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         SpannableString title = new SpannableString("DirtyFrag  1.05");
         title.setSpan(new RelativeSizeSpan(0.45f), 9, title.length(), 0);
         title.setSpan(new ForegroundColorSpan(0x8AFFFFFF), 9, title.length(), 0);
-        // Drop the version to the bottom edge of the letters (descender line).
-        title.setSpan(new android.text.style.MetricAffectingSpan() {
-            @Override public void updateMeasureState(android.text.TextPaint p) {
-                p.baselineShift += (int) (0.55f * p.getTextSize());
-            }
-            @Override public void updateDrawState(android.text.TextPaint p) {
-                p.baselineShift += (int) (0.55f * p.getTextSize());
-            }
-        }, 9, title.length(), 0);
         binding.toolbar.setTitle(title);
         // NOTE: no setSupportActionBar() - it makes the ActionBar delegate draw
         // the title and ignore the toolbar's titleTextAppearance (breaks bold).
