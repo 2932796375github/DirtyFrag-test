@@ -44,7 +44,7 @@ Ephemeral root for Samsung devices (and possibly others) w/ locked bootloaders v
 | android13-5.10 | Untested |
 | android13-5.15 | Yes |
 | android14-5.15 | Untested |
-| android14-6.1 | Not working - appears to patch crashdump64 but then executes unpatched original |
+| android14-6.1 | Not working - accidental mitigation (see V4bel/dirtyfrag issue 23) |
 | android15-6.6 | Yes |
 | android16-6.12 | Yes |
 | android17-6.18 | Untested |
