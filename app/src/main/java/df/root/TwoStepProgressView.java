@@ -20,6 +20,7 @@ public class TwoStepProgressView extends View {
     private static final int TRACK = 0xFF2E2E30;
     private static final int FILL = 0xFF4E8AE8;
     private static final int FILL_GREY = 0xFF2A2A2E;
+    private static final int FAILED_RED = 0xFFE57373;
     private static final int LABEL_GREY = 0xFF47474A;
 
     private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -32,6 +33,7 @@ public class TwoStepProgressView extends View {
     private String leftLabel = "Waiting";
     private String rightLabel = "Verification";
     private int rightColor = 0xFF8E8E8E;
+    private boolean failed;
     private float greyMix = 0f;
     private android.animation.ValueAnimator greyAnimator;
 
@@ -61,8 +63,16 @@ public class TwoStepProgressView extends View {
         invalidate();
     }
 
+    /** Failure mode: bars + labels turn red (same red as the Failed text). */
+    public void setFailed(boolean f) {
+        failed = f;
+        if (f) cancelGreyOut();
+        invalidate();
+    }
+
     public void reset() {
         cancelGreyOut();
+        failed = false;
         setSeg1(0f, "Waiting");
         setSeg2(0f, "Verification", 0xFFFFFFFF);
     }
@@ -118,9 +128,10 @@ public class TwoStepProgressView extends View {
         float gap = GAP_DP * d;
         float half = (w - gap) / 2f;
 
-        // Bars.
+        // Bars. Red while failed, otherwise blue easing to grey once Verified settles.
         trackPaint.setColor(TRACK);
-        fillPaint.setColor(mixColor(FILL, FILL_GREY, greyMix));
+        fillPaint.setColor(failed ? FAILED_RED
+                : mixColor(FILL, FILL_GREY, greyMix));
 
         rect.set(0, 0, half, barH);
         canvas.drawRoundRect(rect, barH / 2f, barH / 2f, trackPaint);
@@ -142,8 +153,10 @@ public class TwoStepProgressView extends View {
         // next render (e.g. after returning from the background).
         textPaint.setTextSize(15 * d);
         float ty = barH + 15 * d - textPaint.ascent();
-        // Labels grey out together with the bars once Verified settles.
-        textPaint.setColor(mixColor(0xFFFFFFFF, LABEL_GREY, greyMix));
+        // Labels grey out together with the bars once Verified settles; both
+        // turn red in failure mode.
+        textPaint.setColor(mixColor(failed ? FAILED_RED : 0xFFFFFFFF,
+                LABEL_GREY, greyMix));
         canvas.drawText(leftLabel, half / 2f, ty, textPaint);
         textPaint.setColor(mixColor(rightColor, LABEL_GREY, greyMix));
         canvas.drawText(rightLabel, half + gap + half / 2f, ty, textPaint);

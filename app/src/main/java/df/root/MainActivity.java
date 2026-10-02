@@ -329,7 +329,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             binding.twoStep.setSeg1(1f, "100%");
             binding.twoStep.setSeg2(1f, "Verified", 0xFFFFFFFF);
         } else if (lastFailed) {
-            binding.twoStep.setSeg2(1f, "Failed", 0xFFE57373);
+            setFailedState();
         }
 
         binding.btnRun.setOnClickListener(v -> {
@@ -614,6 +614,23 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setRootedState(true);
     }
 
+    /** Failure presentation: left bar label "Failure", right label "Reboot",
+     *  bars + labels red, run pill greyed out like the Running/Rooted state.
+     *  The pill stays disabled because the vendor patch is page-cache only:
+     *  retrying without rebooting would fail the same way. */
+    private void setFailedState() {
+        binding.twoStep.setFailed(true);
+        binding.twoStep.setSeg1(seg1, "Failure");
+        binding.twoStep.setSeg2(1f, "Reboot", 0xFFE57373);
+        binding.btnRun.setEnabled(false);
+        binding.btnRun.setText("Run exploit");
+        binding.btnRun.setTextColor(0xFF6E6E6E);
+        binding.btnRun.setBackgroundTintList(ColorStateList.valueOf(0xFF1F1F1F));
+        ((com.google.android.material.button.MaterialButton) binding.btnRun)
+                .setStrokeColor(ColorStateList.valueOf(0xFF1F1F1F));
+        setCompactButton(false, false);
+    }
+
     private void setRootedState(boolean rooted) {
         runArmed = false;
         binding.btnRun.setEnabled(!rooted);
@@ -766,10 +783,13 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             mMain.post(() -> {
                 running = false;
                 boolean rooted = new File("/dev/df").exists();
-                setRootedState(rooted);
-                binding.twoStep.setSeg2(1f,
-                        rooted ? "Verified" : "Failed",
-                        rooted ? 0xFFFFFFFF : 0xFFE57373);
+                if (rooted) {
+                    setRootedState(true);
+                    binding.twoStep.setSeg2(1f, "Verified", 0xFFFFFFFF);
+                } else {
+                    setRootedState(false);
+                    setFailedState();
+                }
                 updateLogVisibility();
             });
         }
