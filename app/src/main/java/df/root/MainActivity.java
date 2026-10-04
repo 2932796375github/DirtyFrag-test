@@ -641,6 +641,15 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 && binding.switchBootStart.isChecked());
     }
 
+    /** Re-read the modules state when returning to the app: if the user just
+     *  granted root in the KSU manager, the toggle updates immediately
+     *  instead of staying stale until the next app open. */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        mExec.execute(this::refreshModuleState);
+    }
+
     private void setRootedState() {
         setRootedState(true);
     }
@@ -655,16 +664,22 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
             java.io.BufferedReader r = new java.io.BufferedReader(
                     new java.io.InputStreamReader(p.getInputStream()));
+            java.io.BufferedReader err = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(p.getErrorStream()));
             StringBuilder sb = new StringBuilder();
             String ln;
             while ((ln = r.readLine()) != null) sb.append(ln).append('\n');
+            StringBuilder eb = new StringBuilder();
+            while ((ln = err.readLine()) != null) eb.append(ln).append('\n');
+            err.close();
             r.close();
             int rc = p.waitFor();
             if (rc == 0) {
                 suState = "ok";
                 return sb.toString();
             }
-            suState = "denied (rc " + rc + ")";
+            suState = ("denied (rc " + rc + ")" + (eb.length() > 0 ? ": " + eb.toString().trim() : ""));
+            Log.i(TAG, "su probe failed: " + suState);
             return null;
         } catch (Exception e) {
             suState = "not found";
@@ -682,9 +697,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 binding.switchModules.setChecked(false);
                 binding.switchModules.setEnabled(false);
                 moduleRefresh = false;
-                binding.modulesSubtitle.setText("not rooted".equals(suState)
+                binding.modulesSubtitle.setText("not found".equals(suState)
                         ? "Requires root (run the exploit first)"
-                        : "Root denied - allow DirtyFrag in KernelSU manager");
+                        : "Allow DirtyFrag in KernelSU");
             });
             return;
         }
@@ -696,6 +711,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 binding.switchModules.setChecked(false);
                 binding.switchModules.setEnabled(false);
                 moduleRefresh = false;
+                Log.i(TAG, "modules toggle: no modules installed");
                 binding.modulesSubtitle.setText("No modules installed");
             });
             return;
@@ -705,16 +721,18 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         if (dis != null) for (String s : dis.split("\n")) if (!s.trim().isEmpty()) disabled++;
         boolean allDisabled = disabled >= total;
         final int fTotal = total, fDisabled = Math.min(disabled, total);
+        String text = fDisabled == 0
+                ? "Enabled - active at next reboot"
+                : fDisabled == fTotal
+                    ? "Disabled - no modules at next reboot"
+                    : fDisabled + " of " + fTotal + " disabled - applies at next reboot";
+        Log.i(TAG, "modules toggle: " + fDisabled + "/" + fTotal + " disabled -> " + text);
         mMain.post(() -> {
             moduleRefresh = true;
             binding.switchModules.setChecked(!allDisabled);
             binding.switchModules.setEnabled(true);
             moduleRefresh = false;
-            binding.modulesSubtitle.setText(fDisabled == 0
-                    ? "Enabled - active at next reboot"
-                    : fDisabled == fTotal
-                        ? "Disabled - no modules at next reboot"
-                        : fDisabled + " of " + fTotal + " disabled - applies at next reboot");
+            binding.modulesSubtitle.setText(text);
         });
     }
 
