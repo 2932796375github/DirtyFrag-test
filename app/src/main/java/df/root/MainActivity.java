@@ -252,7 +252,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setContentView(binding.getRoot());
 
         // Version tag flowing right after the header title.
-        SpannableString title = new SpannableString("DirtyFrag 1.09");
+        SpannableString title = new SpannableString("DirtyFrag 1.08");
         pillSpan = new VersionPillSpan(0.45f);
         title.setSpan(pillSpan, 10, title.length(),
                 SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
