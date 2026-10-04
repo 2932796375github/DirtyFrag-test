@@ -492,13 +492,19 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 }
                 if (pwRef[0] != null) pwRef[0].dismiss();
                 try {
+                    // Deliberately NOT calling `ksud uninstall`: its upstream
+                    // implementation force-flashes a stored boot image when a
+                    // backup exists and reboots the device after 5 seconds -
+                    // surprises we don't want. Explicit removals only, plus
+                    // the manager app this row promises to remove.
                     Process p = Runtime.getRuntime().exec(new String[]{
                             "su", "-c",
-                            "/data/user_de/0/df.root/ksud uninstall; "
-                                    + "rm -rf /data/adb/ksu /data/adb/ksud"
+                            "rm -rf /data/adb/ksu /data/adb/ksud"
                                     + " /data/adb/post-fs-data.d"
                                     + " /data/adb/modules_update"
-                                    + " /data/adb/modules /data/adb/ksu.bk; "
+                                    + " /data/adb/modules /data/adb/ksu.bk"
+                                    + " /data/adb/preinit*; "
+                                    + "pm uninstall me.weishu.kernelsu; "
                                     + "rm -f /data/user_de/0/df.root/ksud"});
                     int rc = p.waitFor();
                     mMain.post(() -> {
