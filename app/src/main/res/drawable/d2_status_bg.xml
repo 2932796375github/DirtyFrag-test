@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sub-block inside the Autorun card housing the Odin D2 vault status. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FF262629" />
+    <corners android:radius="14dp" />
+</shape>

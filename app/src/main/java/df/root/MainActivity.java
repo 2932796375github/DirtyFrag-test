@@ -655,20 +655,31 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     }
 
     /** Reads the Samsung VaultKeeper DMC vault and shows whether Odin
-     *  flashing (Download-mode recovery) is allowed or locked. Read-only
-     *  by design: writing to a Samsung security vault is not something
-     *  this app does silently. */
+     *  flashing (Download-mode recovery) is available. Read-only by design:
+     *  writing to a Samsung security vault is not something this app does
+     *  silently. */
     private void refreshDmc() {
         DmcVault.Result r = DmcVault.read();
         mMain.post(() -> {
             if (!r.supported) {
-                binding.dmcSubtitle.setText("Not available on this device");
-                binding.dmcSubtitle.setTextColor(0xFF9E9E9E);
+                binding.dmcState.setText("Odin Recovery - Unavailable - Non-Samsung");
+                binding.dmcSubtitle.setText("");
+                binding.dmcState.setTextColor(0xFF8E8E8E);
                 return;
             }
-            binding.dmcSubtitle.setText((r.odinAllowed ? "Odin allowed" : "Odin locked")
-                    + " (lock=" + r.lock + " maint=" + r.maint + " at=" + r.at + ")");
-            binding.dmcSubtitle.setTextColor(r.odinAllowed ? 0xFF9E9E9E : 0xFFFFB74D);
+            if (!r.odinAllowed) {
+                binding.dmcState.setText("Odin Recovery - Unavailable - Locked");
+                binding.dmcState.setTextColor(0xFFFFB74D);
+                binding.dmcSubtitle.setText("Be cautious, any brick is unrecoverable");
+                binding.dmcSubtitle.setTextColor(0xFF8E8E8E);
+                return;
+            }
+            binding.dmcState.setText(r.maint == 1
+                    ? "Odin Recovery - Available - Maintenance"
+                    : "Odin Recovery - Available");
+            binding.dmcState.setTextColor(0xFFD9D9D9);
+            binding.dmcSubtitle.setText("Brick recoverable");
+            binding.dmcSubtitle.setTextColor(0xFF8E8E8E);
         });
     }
 
@@ -721,7 +732,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 moduleRefresh = false;
                 binding.modulesSubtitle.setText("not found".equals(suState)
                         ? "Requires root (run the exploit first)"
-                        : "Allow DirtyFrag in KernelSU");
+                        : "No Modules Installed");
             });
             return;
         }
@@ -734,7 +745,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 binding.switchModules.setEnabled(false);
                 moduleRefresh = false;
                 Log.i(TAG, "modules toggle: no modules installed");
-                binding.modulesSubtitle.setText("No modules installed");
+                binding.modulesSubtitle.setText("No Modules Installed");
             });
             return;
         }
@@ -744,10 +755,10 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         boolean allDisabled = disabled >= total;
         final int fTotal = total, fDisabled = Math.min(disabled, total);
         String text = fDisabled == 0
-                ? "Enabled - active at next reboot"
+                ? "Enabled - Active at next reroot"
                 : fDisabled == fTotal
-                    ? "Disabled - no modules at next reboot"
-                    : fDisabled + " of " + fTotal + " disabled - applies at next reboot";
+                    ? "Disabled - No Modules on reroot"
+                    : fDisabled + " of " + fTotal + " disabled - applies at next reroot";
         Log.i(TAG, "modules toggle: " + fDisabled + "/" + fTotal + " disabled -> " + text);
         mMain.post(() -> {
             moduleRefresh = true;
