@@ -71,13 +71,13 @@ public class VersionPillSpan extends ReplacementSpan {
         float padY = capSmall * 0.40f; // full but not baseline-touching
         float pillH = capSmall + 2 * padY;
 
-        // Center the pill on the visual middle of the headline: the uppercase
-        // band of "DirtyFrag" (baseline - cap height .. baseline), which is
-        // what the eye reads as the headline's center line.
+        // Anchor the pill's BOTTOM a fixed gap above the headline baseline
+        // and grow UPWARD from there. Symmetric centering on the cap-band
+        // middle made every size increase hang the pill down onto the
+        // baseline, which read as the old "low pill" bug.
         float capHeight = paint.getTextSize() * 0.7f;
-        float lineCenter = baseline - capHeight / 2f;
-        float pillTop = lineCenter - pillH / 2f;
-        float pillBottom = lineCenter + pillH / 2f;
+        float pillBottom = baseline - capHeight * 0.14f;
+        float pillTop = pillBottom - pillH;
 
         float pillW = lerp(compactW, fullPillW, progress);
         bgPaint.setColor(lerpColor(0xFF2E2E30, 0xFFAEEA00, progress));
@@ -85,9 +85,9 @@ public class VersionPillSpan extends ReplacementSpan {
                 new RectF(x, pillTop, x + pillW, pillBottom),
                 pillH / 2f, pillH / 2f, bgPaint);
 
-        // Digits dead-centered inside the pill: their visual band
-        // (baseline - capSmall .. baseline) is symmetric around lineCenter.
-        float digitBaseline = lineCenter + capSmall / 2f;
+        // Digits dead-centered inside the pill (their band is symmetric
+        // around the pill's center).
+        float digitBaseline = pillBottom - pillH / 2f + capSmall / 2f;
 
         // "1.07" fades out while "Update available" fades in, both anchored
         // to the pill's left edge so the growth reads as expanding text.
