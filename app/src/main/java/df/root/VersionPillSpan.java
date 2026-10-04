@@ -71,11 +71,12 @@ public class VersionPillSpan extends ReplacementSpan {
         float padY = capSmall * 0.45f; // big, but floating clear of cap top and baseline
         float pillH = capSmall + 2 * padY;
 
-        // Center the pill on the headline band's middle (cap top .. baseline):
-        // floating - NOT straddling the baseline, which sank it into the
-        // Autorun card below.
+        // Center the pill HIGH on the headline: empirical on-device
+        // calibration showed the band-middle formula rendered low next to
+        // the word, so the center is raised 0.35 cap-height above the
+        // cap-band middle.
         float capHeight = paint.getTextSize() * 0.7f;
-        float lineCenter = baseline - capHeight / 2f;
+        float lineCenter = baseline - capHeight * 0.85f;
         float pillTop = lineCenter - pillH / 2f;
         float pillBottom = lineCenter + pillH / 2f;
 
