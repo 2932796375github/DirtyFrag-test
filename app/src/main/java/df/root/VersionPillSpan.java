@@ -63,26 +63,31 @@ public class VersionPillSpan extends ReplacementSpan {
         float compactW = digitW + 2 * padX;
         float fullPillW = fullW + 2 * padX;
 
-        Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
-        float smallAscent = -fm.ascent;
-        float digitBandH = smallAscent + padX; // digits + vertical padding
+        // The pill's visual band is the CAP HEIGHT of the pill text (digits
+        // have no ascenders/descenders). Sizing it from the font's full
+        // ascent is what pushed the digits toward the pill's bottom: the
+        // ascent carries ~0.2em of accent headroom above the digits.
+        float capSmall = textPaint.getTextSize() * 0.7f;
+        float padY = capSmall * 0.22f; // snug vertical padding, symmetric
+        float pillH = capSmall + 2 * padY;
+
         // Center the pill on the visual middle of the headline: the uppercase
         // band of "DirtyFrag" (baseline - cap height .. baseline), which is
         // what the eye reads as the headline's center line.
         float capHeight = paint.getTextSize() * 0.7f;
         float lineCenter = baseline - capHeight / 2f;
-        float pillTop = lineCenter - digitBandH / 2f;
-        float pillBottom = lineCenter + digitBandH / 2f;
+        float pillTop = lineCenter - pillH / 2f;
+        float pillBottom = lineCenter + pillH / 2f;
 
         float pillW = lerp(compactW, fullPillW, progress);
         bgPaint.setColor(lerpColor(0xFF2E2E30, 0xFFAEEA00, progress));
         canvas.drawRoundRect(
                 new RectF(x, pillTop, x + pillW, pillBottom),
-                (pillBottom - pillTop) / 2f, (pillBottom - pillTop) / 2f, bgPaint);
+                pillH / 2f, pillH / 2f, bgPaint);
 
-        // Digits are centered inside the pill: their baseline sits
-        // smallAscent/2 below the pill's center line.
-        float digitBaseline = lineCenter + smallAscent / 2f;
+        // Digits dead-centered inside the pill: their visual band
+        // (baseline - capSmall .. baseline) is symmetric around lineCenter.
+        float digitBaseline = lineCenter + capSmall / 2f;
 
         // "1.07" fades out while "Update available" fades in, both anchored
         // to the pill's left edge so the growth reads as expanding text.
