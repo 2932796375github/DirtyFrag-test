@@ -51,6 +51,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     private int cleanupSteps;
     private float seg1;
     private float pillPercent = 0.48f;
+    private VersionPillSpan pillSpan;
+    private TextView titleView;
+    private boolean updateAvailable;
 
     @Override
     public void report(String msg) {
@@ -248,20 +251,18 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setContentView(binding.getRoot());
 
         // Version tag flowing right after the header title.
-        SpannableString title = new SpannableString("DirtyFrag  1.07");
-        title.setSpan(new RelativeSizeSpan(0.45f), 9, title.length(), 0);
-        title.setSpan(new ForegroundColorSpan(0x8AFFFFFF), 9, title.length(), 0);
+        SpannableString title = new SpannableString("DirtyFrag 1.07");
+        pillSpan = new VersionPillSpan(0.45f);
+        title.setSpan(pillSpan, 10, title.length(),
+                SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
         binding.toolbar.setTitle(title);
         // NOTE: no setSupportActionBar() - it makes the ActionBar delegate draw
         // the title and ignore the toolbar's titleTextAppearance (breaks bold).
         // The toolbar renders its own title via app:titleTextAppearance.
 
-        // Update chip: grey pill under the version span, green when GitHub has
-        // a newer release. Same check style as SamSU.
-        binding.updateChip.setText("\u2022");
-        binding.updateChip.setOnClickListener(v -> openUrl(
-                "https://github.com/mitschud/DirtyFrag/releases"));
-        positionUpdateChip();
+        // Update check (SamSU-style): the pill around the version turns green
+        // when GitHub has a newer release; tapping the title opens the releases
+        // page (only while an update is flagged, so it stays a no-op otherwise).
         mExec.execute(this::checkForAppUpdate);
 
         // Force real bold (wght 700) One UI Sans on the toolbar title TextView.
@@ -272,7 +273,12 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             for (int i = 0; i < binding.toolbar.getChildCount(); i++) {
                 View child = binding.toolbar.getChildAt(i);
                 if (child instanceof TextView) {
-                    ((TextView) child).setTypeface(bold);
+                    titleView = (TextView) child;
+                    titleView.setTypeface(bold);
+                    titleView.setOnClickListener(v -> {
+                        if (updateAvailable) openUrl(
+                                "https://github.com/mitschud/DirtyFrag/releases");
+                    });
                 }
             }
         });
@@ -628,29 +634,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setRootedState(true);
     }
 
-    /** Places the update chip directly beneath the "1.0x" span of the title,
-     *  kept inside the toolbar's bounds (a gravity-placed child ended up
-     *  outside them and was clipped invisible). */
-    private void positionUpdateChip() {
-        binding.toolbar.post(() -> {
-            for (int i = 0; i < binding.toolbar.getChildCount(); i++) {
-                View child = binding.toolbar.getChildAt(i);
-                if (child instanceof TextView && child != binding.updateChip) {
-                    TextView tv = (TextView) child;
-                    float d = getResources().getDisplayMetrics().density;
-                    binding.updateChip.setTranslationX(
-                            tv.getX() + tv.getPaint().measureText("DirtyFrag  ") - 4 * d);
-                    binding.updateChip.setTranslationY(binding.toolbar.getHeight()
-                            - Math.max(1, binding.updateChip.getHeight()) - 6);
-                    break;
-                }
-            }
-        });
-    }
-
-    /** SamSU-style GitHub release check: the grey chip turns green when the
-     *  latest published release tag differs from this build's versionName.
-     *  Silent on offline / rate-limit / API hiccups. */
+    /** SamSU-style GitHub release check: the pill around the version turns
+     *  green when the latest published release tag differs from this build's
+     *  versionName. Silent on offline / rate-limit / API hiccups. */
     private void checkForAppUpdate() {
         try {
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
@@ -682,10 +668,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             if (latest.equalsIgnoreCase(mine)) return;
             Log.i(TAG, "update check: update available (latest=" + latest + ")");
             mMain.post(() -> {
-                binding.updateChip.setText("Update");
-                binding.updateChip.setBackgroundTintList(
-                        ColorStateList.valueOf(0xFF2E7D32));
-                binding.updateChip.setTextColor(0xFFFFFFFF);
+                updateAvailable = true;
+                pillSpan.setUpdate(true);
+                if (titleView != null) titleView.invalidate();
             });
         } catch (Exception e) {
             Log.i(TAG, "update check failed: " + e);
