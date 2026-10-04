@@ -646,8 +646,11 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     }
 
     /** Runs a command as root (su). Returns stdout, or null when su is
-     *  unavailable (module not loaded / not granted). */
+     *  unavailable (module not loaded / not granted). Sets suState with the
+     *  failure reason for the UI. */
+    private String suState = "unknown";
     private String runSu(String cmd) {
+        suState = "unknown";
         try {
             Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
             java.io.BufferedReader r = new java.io.BufferedReader(
@@ -656,8 +659,15 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             String ln;
             while ((ln = r.readLine()) != null) sb.append(ln).append('\n');
             r.close();
-            return p.waitFor() == 0 ? sb.toString() : null;
+            int rc = p.waitFor();
+            if (rc == 0) {
+                suState = "ok";
+                return sb.toString();
+            }
+            suState = "denied (rc " + rc + ")";
+            return null;
         } catch (Exception e) {
+            suState = "not found";
             return null;
         }
     }
@@ -672,7 +682,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 binding.switchModules.setChecked(false);
                 binding.switchModules.setEnabled(false);
                 moduleRefresh = false;
-                binding.modulesSubtitle.setText("Requires root (run the exploit first)");
+                binding.modulesSubtitle.setText("not rooted".equals(suState)
+                        ? "Requires root (run the exploit first)"
+                        : "Root denied - allow DirtyFrag in KernelSU manager");
             });
             return;
         }
