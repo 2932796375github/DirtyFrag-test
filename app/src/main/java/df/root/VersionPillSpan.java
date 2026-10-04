@@ -68,7 +68,7 @@ public class VersionPillSpan extends ReplacementSpan {
         // ascent is what pushed the digits toward the pill's bottom: the
         // ascent carries ~0.2em of accent headroom above the digits.
         float capSmall = textPaint.getTextSize() * 0.7f;
-        float padY = capSmall * 0.30f; // vertical breathing room, symmetric
+        float padY = capSmall * 0.50f; // full pill: text occupies half the height
         float pillH = capSmall + 2 * padY;
 
         // Center the pill on the visual middle of the headline: the uppercase
