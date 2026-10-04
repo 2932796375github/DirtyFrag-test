@@ -266,6 +266,10 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         // page (only while an update is flagged, so it stays a no-op otherwise).
         mExec.execute(this::checkForAppUpdate);
 
+        // D2 vault status (Samsung VaultKeeper): Odin flashing allowed or
+        // locked. Read-only; non-Samsung devices show "not available".
+        mExec.execute(this::refreshDmc);
+
         // KSU modules toggle: marks every installed module disabled/enabled
         // (diabl0w ksud convention: per-module `disable` flag files, honored
         // at next boot). State is read back from the device via su.
@@ -648,6 +652,24 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     protected void onResume() {
         super.onResume();
         mExec.execute(this::refreshModuleState);
+    }
+
+    /** Reads the Samsung VaultKeeper DMC vault and shows whether Odin
+     *  flashing (Download-mode recovery) is allowed or locked. Read-only
+     *  by design: writing to a Samsung security vault is not something
+     *  this app does silently. */
+    private void refreshDmc() {
+        DmcVault.Result r = DmcVault.read();
+        mMain.post(() -> {
+            if (!r.supported) {
+                binding.dmcSubtitle.setText("Not available on this device");
+                binding.dmcSubtitle.setTextColor(0xFF9E9E9E);
+                return;
+            }
+            binding.dmcSubtitle.setText((r.odinAllowed ? "Odin allowed" : "Odin locked")
+                    + " (lock=" + r.lock + " maint=" + r.maint + " at=" + r.at + ")");
+            binding.dmcSubtitle.setTextColor(r.odinAllowed ? 0xFF9E9E9E : 0xFFFFB74D);
+        });
     }
 
     private void setRootedState() {
