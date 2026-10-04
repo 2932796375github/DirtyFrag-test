@@ -316,12 +316,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         });
         updateLogVisibility();
 
-        // Root backend selection: KernelSU (diabl0w's bundled ksud, default)
-        // vs ReSukiSU (shim deferring to the manager's bundled ksud).
-        styleBackendButtons();
-        binding.btnBackendKsu.setOnClickListener(v -> setBackend(v, ExploitRunner.BACKEND_KSU));
-        binding.btnBackendResukisu.setOnClickListener(v -> setBackend(v, ExploitRunner.BACKEND_RESUKISU));
-
         // Restore the simple status for the current state: rooted device or a
         // successful last run -> 100% + Verified; failed run -> Failed.
         boolean rootedNow = new File("/dev/df").exists();
@@ -351,8 +345,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             running = true;
             binding.btnRun.setEnabled(false);
-            binding.btnBackendKsu.setEnabled(false);
-            binding.btnBackendResukisu.setEnabled(false);
             binding.btnRun.setText("Running");
             // Same dark greyed-out styling as the Rooted state.
             binding.btnRun.setTextColor(0xFF6E6E6E);
@@ -628,38 +620,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setRootedState(true);
     }
 
-    /** Selected root backend. Must live in device-protected storage so the
-     *  BootReceiver staging path (pre-unlock) reads the same value. */
-    private String backend() {
-        return createDeviceProtectedStorageContext()
-                .getSharedPreferences("dfroot", MODE_PRIVATE)
-                .getString("backend", ExploitRunner.BACKEND_KSU);
-    }
-
-    private void setBackend(View v, String backend) {
-        v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-        createDeviceProtectedStorageContext()
-                .getSharedPreferences("dfroot", MODE_PRIVATE)
-                .edit().putString("backend", backend).apply();
-        styleBackendButtons();
-        if (ExploitRunner.BACKEND_RESUKISU.equals(backend)
-                && getPackageManager().getLaunchIntentForPackage("com.resukisu.resukisu") == null) {
-            Toast.makeText(this, "Install the ReSukiSU manager first", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void styleBackendButtons() {
-        styleBackend(binding.btnBackendKsu, !ExploitRunner.BACKEND_RESUKISU.equals(backend()));
-        styleBackend(binding.btnBackendResukisu, ExploitRunner.BACKEND_RESUKISU.equals(backend()));
-    }
-
-    private static void styleBackend(com.google.android.material.button.MaterialButton b,
-                                     boolean selected) {
-        b.setBackgroundTintList(ColorStateList.valueOf(selected ? 0xFF3C3C40 : 0xFF1F1F1F));
-        b.setTextColor(selected ? 0xFFE0E0E0 : 0xFF6E6E6E);
-        b.setStrokeColor(ColorStateList.valueOf(selected ? 0xFF4A4A4E : 0xFF1F1F1F));
-    }
-
     /** Failure presentation: left bar label "Failure", right label "Reboot",
      *  bars + labels red, run pill greyed out like the Running/Rooted state.
      *  The pill stays disabled because the vendor patch is page-cache only:
@@ -761,18 +721,9 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     }
 
     private void openKsu() {
-        // Try the known manager packages: the selected backend first, then
-        // official KernelSU, ReSukiSU, KernelSU-Next and APatch.
-        java.util.LinkedHashSet<String> candidates = new java.util.LinkedHashSet<>();
-        if (ExploitRunner.BACKEND_RESUKISU.equals(backend())) {
-            candidates.add("com.resukisu.resukisu");
-            candidates.add("me.weishu.kernelsu");
-        } else {
-            candidates.add("me.weishu.kernelsu");
-            candidates.add("com.resukisu.resukisu");
-        }
-        candidates.add("com.rifsxd.ksunext");
-        candidates.add("me.bmax.apatch");
+        // Try the known manager packages: official KernelSU, KernelSU-Next, APatch.
+        String[] candidates = {
+                "me.weishu.kernelsu", "com.rifsxd.ksunext", "me.bmax.apatch"};
         PackageManager pm = getPackageManager();
         for (String pkg : candidates) {
             Intent launch = pm.getLaunchIntentForPackage(pkg);
@@ -837,8 +788,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         } finally {
             mMain.post(() -> {
                 running = false;
-                binding.btnBackendKsu.setEnabled(true);
-                binding.btnBackendResukisu.setEnabled(true);
                 boolean rooted = new File("/dev/df").exists();
                 if (rooted) {
                     setRootedState(true);

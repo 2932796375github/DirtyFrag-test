@@ -174,97 +174,42 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
+            android:orientation="horizontal"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:paddingTop="10dp"
             android:paddingBottom="10dp">
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical"
+                android:orientation="vertical"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp">
 
-                <LinearLayout
-                    android:layout_width="0dp"
+                <TextView
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_gravity="center_vertical"
-                    android:orientation="vertical"
-                    android:paddingTop="6dp"
-                    android:paddingBottom="6dp">
+                    android:text="Show advanced log"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="16sp" />
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Show advanced log"
-                        android:textColor="#FFFFFFFF"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Shows full log in addition to simple status"
-                        android:textColor="#FF9E9E9E"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-                <df.root.OneUiSwitch
-                    android:id="@+id/switchAdvancedLog"
-                    android:layout_width="wrap_content"
+                <TextView
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical" />
+                    android:text="Shows full log in addition to simple status"
+                    android:textColor="#FF9E9E9E"
+                    android:textSize="12sp" />
 
             </LinearLayout>
 
-            <TextView
-                android:layout_width="match_parent"
+            <df.root.OneUiSwitch
+                android:id="@+id/switchAdvancedLog"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Root backend"
-                android:textColor="#FF9E9E9E"
-                android:textSize="12sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnBackendKsu"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="4dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="KernelSU"
-                    android:textSize="13sp"
-                    android:backgroundTint="#FF3C3C40"
-                    android:textColor="#FFE0E0E0"
-                    app:strokeWidth="0.5dp"
-                    app:strokeColor="#FF4A4A4E" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnBackendResukisu"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="ReSukiSU"
-                    android:textSize="13sp"
-                    android:backgroundTint="#FF1F1F1F"
-                    android:textColor="#FF6E6E6E"
-                    app:strokeWidth="0.5dp"
-                    app:strokeColor="#FF1F1F1F" />
-
-            </LinearLayout>
+                android:layout_gravity="center_vertical" />
 
         </LinearLayout>
 
