@@ -268,7 +268,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
         // D2 vault status (Samsung VaultKeeper): Odin flashing allowed or
         // locked. Read-only; non-Samsung devices show "not available".
-        mExec.execute(this::refreshDmc);
 
         // KSU modules toggle: marks every installed module disabled/enabled
         // (diabl0w ksud convention: per-module `disable` flag files, honored
@@ -657,31 +656,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     /** Reads the Samsung VaultKeeper DMC vault and shows whether Odin
      *  flashing (Download-mode recovery) is available. Read-only by design:
      *  writing to a Samsung security vault is not something this app does
-     *  silently. */
-    private void refreshDmc() {
-        DmcVault.Result r = DmcVault.read();
-        mMain.post(() -> {
-            if (!r.supported) {
-                binding.dmcState.setText("Odin Recovery - Unavailable - Non-Samsung");
-                binding.dmcSubtitle.setText("");
-                binding.dmcState.setTextColor(0xFF8E8E8E);
-                return;
-            }
-            if (!r.odinAllowed) {
-                binding.dmcState.setText("Odin Recovery - Unavailable - Locked");
-                binding.dmcState.setTextColor(0xFFFFB74D);
-                binding.dmcSubtitle.setText("Be cautious, any brick is unrecoverable");
-                binding.dmcSubtitle.setTextColor(0xFF8E8E8E);
-                return;
-            }
-            binding.dmcState.setText(r.maint == 1
-                    ? "Odin Recovery - Available - Maintenance"
-                    : "Odin Recovery - Available");
-            binding.dmcState.setTextColor(0xFFD9D9D9);
-            binding.dmcSubtitle.setText("Brick recoverable");
-            binding.dmcSubtitle.setTextColor(0xFF8E8E8E);
-        });
-    }
 
     private void setRootedState() {
         setRootedState(true);

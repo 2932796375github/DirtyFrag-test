@@ -156,35 +156,6 @@
 
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/d2_status_bg"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="10dp">
-
-            <TextView
-                android:id="@+id/dmcState"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Odin Recovery - Checking..."
-                android:textColor="#FFD9D9D9"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/dmcSubtitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
-                android:text="Checking..."
-                android:textColor="#FF8E8E8E"
-                android:textSize="10sp" />
-
-        </LinearLayout>
-
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView
