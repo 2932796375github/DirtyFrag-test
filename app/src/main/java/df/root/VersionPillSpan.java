@@ -68,16 +68,13 @@ public class VersionPillSpan extends ReplacementSpan {
         // ascent is what pushed the digits toward the pill's bottom: the
         // ascent carries ~0.2em of accent headroom above the digits.
         float capSmall = textPaint.getTextSize() * 0.7f;
-        float padY = capSmall * 0.40f; // full but not baseline-touching
+        float padY = capSmall * 0.25f; // reference visual: pill ~1.5x the digit band
         float pillH = capSmall + 2 * padY;
 
-        // Anchor the pill's BOTTOM a fixed gap above the headline baseline
-        // and grow UPWARD from there. Symmetric centering on the cap-band
-        // middle made every size increase hang the pill down onto the
-        // baseline, which read as the old "low pill" bug.
-        float capHeight = paint.getTextSize() * 0.7f;
-        float pillBottom = baseline - capHeight * 0.14f;
-        float pillTop = pillBottom - pillH;
+        // Reference visual: the pill is centered ON the headline's baseline
+        // (straddling it; bottom edge level with the descender line).
+        float pillTop = baseline - pillH / 2f;
+        float pillBottom = baseline + pillH / 2f;
 
         float pillW = lerp(compactW, fullPillW, progress);
         bgPaint.setColor(lerpColor(0xFF2E2E30, 0xFFAEEA00, progress));
