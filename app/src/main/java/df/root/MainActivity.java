@@ -669,8 +669,20 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             Log.i(TAG, "update check: update available (latest=" + latest + ")");
             mMain.post(() -> {
                 updateAvailable = true;
-                pillSpan.setUpdate(true);
-                if (titleView != null) titleView.invalidate();
+                // Grow the pill from its left edge into the lime update state,
+                // same 250ms feel as the Run pill's shrink.
+                if (titleView != null) {
+                    android.animation.ValueAnimator a =
+                            android.animation.ValueAnimator.ofFloat(0f, 1f);
+                    a.setDuration(250);
+                    a.addUpdateListener(anim -> {
+                        pillSpan.setProgress((float) anim.getAnimatedValue());
+                        titleView.invalidate();
+                    });
+                    a.start();
+                } else {
+                    pillSpan.setProgress(1f);
+                }
             });
         } catch (Exception e) {
             Log.i(TAG, "update check failed: " + e);
