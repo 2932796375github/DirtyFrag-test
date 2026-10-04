@@ -653,10 +653,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         mExec.execute(this::refreshModuleState);
     }
 
-    /** Reads the Samsung VaultKeeper DMC vault and shows whether Odin
-     *  flashing (Download-mode recovery) is available. Read-only by design:
-     *  writing to a Samsung security vault is not something this app does
-
     private void setRootedState() {
         setRootedState(true);
     }
