@@ -54,6 +54,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     private VersionPillSpan pillSpan;
     private TextView titleView;
     private boolean updateAvailable;
+    private boolean moduleRefresh;
 
     @Override
     public void report(String msg) {
@@ -264,6 +265,16 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         // when GitHub has a newer release; tapping the title opens the releases
         // page (only while an update is flagged, so it stays a no-op otherwise).
         mExec.execute(this::checkForAppUpdate);
+
+        // KSU modules toggle: marks every installed module disabled/enabled
+        // (diabl0w ksud convention: per-module `disable` flag files, honored
+        // at next boot). State is read back from the device via su.
+        binding.switchModules.setOnCheckedChangeListener((btn, on) -> {
+            if (moduleRefresh) return;
+            btn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            applyModuleState(on);
+        });
+        mExec.execute(this::refreshModuleState);
 
         // Force real bold (wght 700) One UI Sans on the toolbar title TextView.
         binding.toolbar.post(() -> {
@@ -632,6 +643,87 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
     private void setRootedState() {
         setRootedState(true);
+    }
+
+    /** Runs a command as root (su). Returns stdout, or null when su is
+     *  unavailable (module not loaded / not granted). */
+    private String runSu(String cmd) {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(p.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String ln;
+            while ((ln = r.readLine()) != null) sb.append(ln).append('\n');
+            r.close();
+            return p.waitFor() == 0 ? sb.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Reads the modules' disable-flag state from /data/adb/modules via su and
+     *  syncs the toggle. All-disabled = switch off, otherwise on. */
+    private void refreshModuleState() {
+        String mods = runSu("ls /data/adb/modules 2>/dev/null");
+        if (mods == null) {
+            mMain.post(() -> {
+                moduleRefresh = true;
+                binding.switchModules.setChecked(false);
+                binding.switchModules.setEnabled(false);
+                moduleRefresh = false;
+                binding.modulesSubtitle.setText("Requires root (run the exploit first)");
+            });
+            return;
+        }
+        int total = 0;
+        for (String s : mods.split("\n")) if (!s.trim().isEmpty()) total++;
+        if (total == 0) {
+            mMain.post(() -> {
+                moduleRefresh = true;
+                binding.switchModules.setChecked(false);
+                binding.switchModules.setEnabled(false);
+                moduleRefresh = false;
+                binding.modulesSubtitle.setText("No modules installed");
+            });
+            return;
+        }
+        String dis = runSu("ls /data/adb/modules/*/disable 2>/dev/null");
+        int disabled = 0;
+        if (dis != null) for (String s : dis.split("\n")) if (!s.trim().isEmpty()) disabled++;
+        boolean allDisabled = disabled >= total;
+        final int fTotal = total, fDisabled = Math.min(disabled, total);
+        mMain.post(() -> {
+            moduleRefresh = true;
+            binding.switchModules.setChecked(!allDisabled);
+            binding.switchModules.setEnabled(true);
+            moduleRefresh = false;
+            binding.modulesSubtitle.setText(fDisabled == 0
+                    ? "Enabled - active at next reboot"
+                    : fDisabled == fTotal
+                        ? "Disabled - no modules at next reboot"
+                        : fDisabled + " of " + fTotal + " disabled - applies at next reboot");
+        });
+    }
+
+    /** Applies the toggle: disable = touch a `disable` flag in every module,
+     *  enable = remove them. Takes effect at the next reboot (modules are
+     *  mounted during boot only). */
+    private void applyModuleState(boolean on) {
+        String cmd = on
+                ? "rm -f /data/adb/modules/*/disable 2>/dev/null"
+                : "for d in /data/adb/modules/*/; do [ -f \"$d/module.prop\" ] && touch \"$d/disable\" 2>/dev/null; done";
+        mExec.execute(() -> {
+            String r = runSu(cmd);
+            mMain.post(() -> {
+                Toast.makeText(MainActivity.this,
+                        r == null ? "su not available"
+                                : on ? "KSU modules enabled - applies after reboot"
+                                : "KSU modules disabled - applies after reboot",
+                        Toast.LENGTH_SHORT).show();
+                refreshModuleState();
+            });
+        });
     }
 
     /** SamSU-style GitHub release check: the pill around the version turns
