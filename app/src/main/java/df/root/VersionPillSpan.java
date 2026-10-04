@@ -65,9 +65,12 @@ public class VersionPillSpan extends ReplacementSpan {
 
         Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
         float smallAscent = -fm.ascent;
-        // Pill vertically centered on the digits' band (no descenders).
-        float pillTop = baseline - smallAscent - padX * 0.5f;
-        float pillBottom = baseline + padX * 0.5f;
+        float digitBandH = smallAscent + padX; // digits + vertical padding
+        // Center the pill on the title's center line (the line's own top/bottom
+        // come in as span params), so it can never drift into the clip zone.
+        float lineCenter = (top + bottom) / 2f;
+        float pillTop = lineCenter - digitBandH / 2f;
+        float pillBottom = lineCenter + digitBandH / 2f;
 
         float pillW = lerp(compactW, fullPillW, progress);
         bgPaint.setColor(lerpColor(0xFF2E2E30, 0xFFAEEA00, progress));
@@ -75,16 +78,20 @@ public class VersionPillSpan extends ReplacementSpan {
                 new RectF(x, pillTop, x + pillW, pillBottom),
                 (pillBottom - pillTop) / 2f, (pillBottom - pillTop) / 2f, bgPaint);
 
+        // Digits are centered inside the pill: their baseline sits
+        // smallAscent/2 below the pill's center line.
+        float digitBaseline = lineCenter + smallAscent / 2f;
+
         // "1.07" fades out while "Update available" fades in, both anchored
         // to the pill's left edge so the growth reads as expanding text.
         if (progress < 1f) {
             int fg = lerpColor(0xFFD9D9D9, 0xFF101418, progress);
             textPaint.setColor((fg & 0xFFFFFF) | ((int) (255 * (1 - progress)) << 24));
-            canvas.drawText(text, start, end, x + padX, baseline, textPaint);
+            canvas.drawText(text, start, end, x + padX, digitBaseline, textPaint);
         }
         if (progress > 0f) {
             textPaint.setColor((0xFF101418 & 0xFFFFFF) | ((int) (255 * progress) << 24));
-            canvas.drawText(UPDATE_TEXT, x + padX, baseline, textPaint);
+            canvas.drawText(UPDATE_TEXT, x + padX, digitBaseline, textPaint);
         }
     }
 }
