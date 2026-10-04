@@ -1,0 +1,2 @@
+# Shell shim must keep LF endings - CRLF breaks the shebang on device
+app/src/main/assets/ksud_resukisu -text
