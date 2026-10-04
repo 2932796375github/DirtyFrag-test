@@ -2,6 +2,6 @@
 <!-- Update chip under the header version: grey normally, green when a
      newer GitHub release exists (tinted at runtime). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#FF47474A" />
+    <solid android:color="#FF5A5A5E" />
     <corners android:radius="7dp" />
 </shape>

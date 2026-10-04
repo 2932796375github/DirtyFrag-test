@@ -258,6 +258,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
         // Update chip: grey pill under the version span, green when GitHub has
         // a newer release. Same check style as SamSU.
+        binding.updateChip.setText("\u2022");
         binding.updateChip.setOnClickListener(v -> openUrl(
                 "https://github.com/mitschud/DirtyFrag/releases"));
         positionUpdateChip();
@@ -664,7 +665,10 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             while ((line = reader.readLine()) != null) body.append(line);
             reader.close();
             String tag = new org.json.JSONObject(body.toString()).optString("tag_name", "");
-            if (tag.isEmpty()) return;
+            if (tag.isEmpty()) {
+                Log.i(TAG, "update check: empty tag_name");
+                return;
+            }
             String latest = tag.replaceFirst("^[vV]", "").trim();
             String mine;
             try {
@@ -673,14 +677,15 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 return;
             }
             if (latest.equalsIgnoreCase(mine)) return;
+            Log.i(TAG, "update check: update available (latest=" + latest + ")");
             mMain.post(() -> {
                 binding.updateChip.setText("Update");
                 binding.updateChip.setBackgroundTintList(
                         ColorStateList.valueOf(0xFF2E7D32));
                 binding.updateChip.setTextColor(0xFFFFFFFF);
             });
-        } catch (Exception ignored) {
-            /* Offline, rate-limited, or API hiccup: stay grey. */
+        } catch (Exception e) {
+            Log.i(TAG, "update check failed: " + e);
         }
     }
 
