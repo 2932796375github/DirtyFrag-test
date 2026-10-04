@@ -66,9 +66,11 @@ public class VersionPillSpan extends ReplacementSpan {
         Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
         float smallAscent = -fm.ascent;
         float digitBandH = smallAscent + padX; // digits + vertical padding
-        // Center the pill on the title's center line (the line's own top/bottom
-        // come in as span params), so it can never drift into the clip zone.
-        float lineCenter = (top + bottom) / 2f;
+        // Center the pill on the visual middle of the headline: the uppercase
+        // band of "DirtyFrag" (baseline - cap height .. baseline), which is
+        // what the eye reads as the headline's center line.
+        float capHeight = paint.getTextSize() * 0.7f;
+        float lineCenter = baseline - capHeight / 2f;
         float pillTop = lineCenter - digitBandH / 2f;
         float pillBottom = lineCenter + digitBandH / 2f;
 
