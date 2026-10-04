@@ -248,13 +248,20 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setContentView(binding.getRoot());
 
         // Version tag flowing right after the header title.
-        SpannableString title = new SpannableString("DirtyFrag  1.06");
+        SpannableString title = new SpannableString("DirtyFrag  1.07");
         title.setSpan(new RelativeSizeSpan(0.45f), 9, title.length(), 0);
         title.setSpan(new ForegroundColorSpan(0x8AFFFFFF), 9, title.length(), 0);
         binding.toolbar.setTitle(title);
         // NOTE: no setSupportActionBar() - it makes the ActionBar delegate draw
         // the title and ignore the toolbar's titleTextAppearance (breaks bold).
         // The toolbar renders its own title via app:titleTextAppearance.
+
+        // Update chip: grey pill under the version span, green when GitHub has
+        // a newer release. Same check style as SamSU.
+        binding.updateChip.setOnClickListener(v -> openUrl(
+                "https://github.com/mitschud/DirtyFrag/releases"));
+        positionUpdateChip();
+        mExec.execute(this::checkForAppUpdate);
 
         // Force real bold (wght 700) One UI Sans on the toolbar title TextView.
         binding.toolbar.post(() -> {
@@ -618,6 +625,63 @@ public class MainActivity extends AppCompatActivity implements IReporter {
 
     private void setRootedState() {
         setRootedState(true);
+    }
+
+    /** Places the update chip directly beneath the "1.0x" span of the title. */
+    private void positionUpdateChip() {
+        binding.toolbar.post(() -> {
+            for (int i = 0; i < binding.toolbar.getChildCount(); i++) {
+                View child = binding.toolbar.getChildAt(i);
+                if (child instanceof TextView) {
+                    TextView tv = (TextView) child;
+                    float versionX = tv.getX()
+                            + tv.getPaint().measureText("DirtyFrag  ");
+                    binding.updateChip.setTranslationX(versionX - 4 * getResources()
+                            .getDisplayMetrics().density);
+                    break;
+                }
+            }
+        });
+    }
+
+    /** SamSU-style GitHub release check: the grey chip turns green when the
+     *  latest published release tag differs from this build's versionName.
+     *  Silent on offline / rate-limit / API hiccups. */
+    private void checkForAppUpdate() {
+        try {
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                    new java.net.URL("https://api.github.com/repos/mitschud/DirtyFrag/releases/latest")
+                            .openConnection();
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(8000);
+            conn.setRequestProperty("Accept", "application/vnd.github+json");
+            conn.setRequestProperty("User-Agent", "DirtyFrag");
+            if (conn.getResponseCode() != 200) return;
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream()));
+            StringBuilder body = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) body.append(line);
+            reader.close();
+            String tag = new org.json.JSONObject(body.toString()).optString("tag_name", "");
+            if (tag.isEmpty()) return;
+            String latest = tag.replaceFirst("^[vV]", "").trim();
+            String mine;
+            try {
+                mine = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                return;
+            }
+            if (latest.equalsIgnoreCase(mine)) return;
+            mMain.post(() -> {
+                binding.updateChip.setText("Update");
+                binding.updateChip.setBackgroundTintList(
+                        ColorStateList.valueOf(0xFF2E7D32));
+                binding.updateChip.setTextColor(0xFFFFFFFF);
+            });
+        } catch (Exception ignored) {
+            /* Offline, rate-limited, or API hiccup: stay grey. */
+        }
     }
 
     /** Failure presentation: left bar label "Failure", right label "Reboot",
