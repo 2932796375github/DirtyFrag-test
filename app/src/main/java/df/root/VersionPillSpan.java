@@ -24,11 +24,11 @@ public class VersionPillSpan extends ReplacementSpan {
     }
 
     private int bgColor() {
-        return update ? 0xFF2E7D32 : 0xFF5A5A5E;
+        return update ? 0xFFAEEA00 : 0xFF5A5A5E; // lime on update
     }
 
     private int fgColor() {
-        return update ? 0xFFFFFFFF : 0xFFD9D9D9;
+        return update ? 0xFF101418 : 0xFFD9D9D9;
     }
 
     @Override
@@ -37,7 +37,7 @@ public class VersionPillSpan extends ReplacementSpan {
         textPaint.set(paint);
         textPaint.setTextSize(paint.getTextSize() * scale);
         float w = textPaint.measureText(text, start, end);
-        float pad = paint.getTextSize() * 0.30f;
+        float pad = paint.getTextSize() * 0.22f;
         // Line metrics stay those of the title; the pill is drawn around the
         // baseline, so no vertical contribution is needed here.
         return (int) (w + 2 * pad);
@@ -51,16 +51,20 @@ public class VersionPillSpan extends ReplacementSpan {
         textPaint.setColor(fgColor());
         bgPaint.setColor(bgColor());
 
-        float padX = paint.getTextSize() * 0.30f;
+        float padX = paint.getTextSize() * 0.22f;
+        float padY = padX * 0.5f;
         float textW = textPaint.measureText(text, start, end);
         Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
-        float padY = padX * 0.55f;
-        float pillTop = baseline - (-fm.ascent) - padY;
-        float pillBottom = baseline + fm.descent + padY;
+        float smallAscent = -fm.ascent;
+        // Nudge the pill upward so its bottom never clips at the title view's
+        // lower edge, and tighten it around the digits (no descender room).
+        float raise = paint.getTextSize() * 0.14f;
+        float pillTop = baseline - smallAscent - padY - raise;
+        float pillBottom = baseline + padY - raise;
 
         canvas.drawRoundRect(
                 new RectF(x, pillTop, x + textW + 2 * padX, pillBottom),
                 (pillBottom - pillTop) / 2f, (pillBottom - pillTop) / 2f, bgPaint);
-        canvas.drawText(text, start, end, x + padX, baseline, textPaint);
+        canvas.drawText(text, start, end, x + padX, baseline - raise, textPaint);
     }
 }
