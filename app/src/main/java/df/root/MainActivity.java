@@ -628,17 +628,20 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         setRootedState(true);
     }
 
-    /** Places the update chip directly beneath the "1.0x" span of the title. */
+    /** Places the update chip directly beneath the "1.0x" span of the title,
+     *  kept inside the toolbar's bounds (a gravity-placed child ended up
+     *  outside them and was clipped invisible). */
     private void positionUpdateChip() {
         binding.toolbar.post(() -> {
             for (int i = 0; i < binding.toolbar.getChildCount(); i++) {
                 View child = binding.toolbar.getChildAt(i);
-                if (child instanceof TextView) {
+                if (child instanceof TextView && child != binding.updateChip) {
                     TextView tv = (TextView) child;
-                    float versionX = tv.getX()
-                            + tv.getPaint().measureText("DirtyFrag  ");
-                    binding.updateChip.setTranslationX(versionX - 4 * getResources()
-                            .getDisplayMetrics().density);
+                    float d = getResources().getDisplayMetrics().density;
+                    binding.updateChip.setTranslationX(
+                            tv.getX() + tv.getPaint().measureText("DirtyFrag  ") - 4 * d);
+                    binding.updateChip.setTranslationY(binding.toolbar.getHeight()
+                            - Math.max(1, binding.updateChip.getHeight()) - 6);
                     break;
                 }
             }
