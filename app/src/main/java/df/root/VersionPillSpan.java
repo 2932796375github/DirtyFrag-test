@@ -68,13 +68,16 @@ public class VersionPillSpan extends ReplacementSpan {
         // ascent is what pushed the digits toward the pill's bottom: the
         // ascent carries ~0.2em of accent headroom above the digits.
         float capSmall = textPaint.getTextSize() * 0.7f;
-        float padY = capSmall * 0.25f; // reference visual: pill ~1.5x the digit band
+        float padY = capSmall * 0.45f; // big, but floating clear of cap top and baseline
         float pillH = capSmall + 2 * padY;
 
-        // Reference visual: the pill is centered ON the headline's baseline
-        // (straddling it; bottom edge level with the descender line).
-        float pillTop = baseline - pillH / 2f;
-        float pillBottom = baseline + pillH / 2f;
+        // Center the pill on the headline band's middle (cap top .. baseline):
+        // floating - NOT straddling the baseline, which sank it into the
+        // Autorun card below.
+        float capHeight = paint.getTextSize() * 0.7f;
+        float lineCenter = baseline - capHeight / 2f;
+        float pillTop = lineCenter - pillH / 2f;
+        float pillBottom = lineCenter + pillH / 2f;
 
         float pillW = lerp(compactW, fullPillW, progress);
         bgPaint.setColor(lerpColor(0xFF2E2E30, 0xFFAEEA00, progress));
@@ -84,7 +87,7 @@ public class VersionPillSpan extends ReplacementSpan {
 
         // Digits dead-centered inside the pill (their band is symmetric
         // around the pill's center).
-        float digitBaseline = pillBottom - pillH / 2f + capSmall / 2f;
+        float digitBaseline = lineCenter + capSmall / 2f;
 
         // "1.07" fades out while "Update available" fades in, both anchored
         // to the pill's left edge so the growth reads as expanding text.
