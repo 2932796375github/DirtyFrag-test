@@ -24,7 +24,7 @@ public class VersionPillSpan extends ReplacementSpan {
     }
 
     private int bgColor() {
-        return update ? 0xFFAEEA00 : 0xFF5A5A5E; // lime on update
+        return update ? 0xFFAEEA00 : 0xFF2E2E30; // matches the UI's dark pills
     }
 
     private int fgColor() {
@@ -56,15 +56,15 @@ public class VersionPillSpan extends ReplacementSpan {
         float textW = textPaint.measureText(text, start, end);
         Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
         float smallAscent = -fm.ascent;
-        // Nudge the pill upward so its bottom never clips at the title view's
-        // lower edge, and tighten it around the digits (no descender room).
-        float raise = paint.getTextSize() * 0.14f;
-        float pillTop = baseline - smallAscent - padY - raise;
-        float pillBottom = baseline + padY - raise;
+        // Center the pill on the digits' band: digits span from
+        // baseline - smallAscent down to the baseline (no descenders), so
+        // symmetric padding around that band centers them vertically.
+        float pillTop = baseline - smallAscent - padY;
+        float pillBottom = baseline + padY;
 
         canvas.drawRoundRect(
                 new RectF(x, pillTop, x + textW + 2 * padX, pillBottom),
                 (pillBottom - pillTop) / 2f, (pillBottom - pillTop) / 2f, bgPaint);
-        canvas.drawText(text, start, end, x + padX, baseline - raise, textPaint);
+        canvas.drawText(text, start, end, x + padX, baseline, textPaint);
     }
 }
