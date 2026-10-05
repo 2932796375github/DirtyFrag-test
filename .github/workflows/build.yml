@@ -190,9 +190,6 @@ jobs:
         with:
           name: DirtyFrag-universal
           path: out/
-      - name: Fetch OFFICIAL manager built from the same commit (no PR builds)
-        env:
-          GH_TOKEN: ${{ github.token }}
       - uses: android-actions/setup-android@v3
       - name: Fetch OFFICIAL manager built from the same commit (no PR builds)
         env:
