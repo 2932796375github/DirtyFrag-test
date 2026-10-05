@@ -16,9 +16,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Resolve latest successful upstream build-manager run
         id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          RUN=$(curl -sf "https://api.github.com/repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1" | \
-            python3 -c 'import json,sys; r=json.load(sys.stdin)["workflow_runs"][0]; print(r["id"], r["head_sha"])')
+          RUN=$(gh api "repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0] | "\(.id) \(.head_sha)"')
           echo "run_id=$(echo $RUN | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "sha=$(echo $RUN | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
       - name: Compare with pinned run
