@@ -80,6 +80,7 @@ jobs:
     needs: [resolve-ksu]
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         kmi: [android12-5.10, android13-5.10, android13-5.15, android14-5.15, android15-6.6, android16-6.12, android17-6.18]
     container:
@@ -111,6 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         kmi: [android12-5.10, android13-5.10, android13-5.15, android14-5.15, android15-6.6, android16-6.12, android17-6.18]
     container:
