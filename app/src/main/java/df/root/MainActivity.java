@@ -86,7 +86,7 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             // auto-scroll only when the user is already reading at the bottom;
             // otherwise a background merge (dfsh poll) yanks the view around
             binding.outputScroll.post(() -> {
-                ScrollView sc = binding.outputScroll;
+                android.widget.ScrollView sc = binding.outputScroll;
                 int max = binding.outputView.getHeight() + binding.outputView.getPaddingBottom()
                         - sc.getHeight();
                 if (sc.getScrollY() >= max - 40) sc.fullScroll(View.FOCUS_DOWN);
