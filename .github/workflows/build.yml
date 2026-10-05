@@ -60,6 +60,7 @@ jobs:
         with:
           name: ksu-daemon
           path: target/aarch64-linux-android/release/ksud
+          retention-days: 1
 
   kernelsu-ko:
     name: Build kernelsu.ko (${{ matrix.kmi }})
@@ -89,6 +90,7 @@ jobs:
         with:
           name: kernelsu-${{ matrix.kmi }}
           path: kernelsu-${{ matrix.kmi }}.ko
+          retention-days: 1
 
   dirtyfrag-ko:
     name: Build dirtyfrag.ko (${{ matrix.kmi }})
@@ -120,6 +122,7 @@ jobs:
         with:
           name: dirtyfrag-${{ matrix.kmi }}
           path: dirtyfrag-${{ matrix.kmi }}.ko
+          retention-days: 1
 
   pack-apk:
     name: Pack DirtyFrag Universal APK
@@ -165,6 +168,7 @@ jobs:
         with:
           name: DirtyFrag-universal
           path: out/
+          retention-days: 1
 
   nightly:
     name: Publish rolling nightly
