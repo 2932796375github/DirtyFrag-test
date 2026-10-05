@@ -1,20 +1,16 @@
 #!/system/bin/sh
-# DirtyFrag Universal - executed as uid 0 by dirtyfrag.ko UMH.
-# At this point SELinux is already permissive (written by the module).
+# DirtyFrag Universal - executed as uid 0 by dirtyfrag.ko UMH (SELinux permissive).
+# ksud embeds the per-KMI kernelsu.ko set; late-load loads it from memory.
 DB=/data/user_de/0/df.root
-API=$(uname -r | sed -n 's/.*android\([0-9]*\)-.*/\1/p')
-KV=$(uname -r | cut -d. -f1-2)
-KMI="android${API}-${KV}"
-# Install the paired KSU kernel module for this KMI
-if [ -f "$DB/kernelsu-$KMI.ko" ]; then
-    cp "$DB/kernelsu-$KMI.ko" /data/adb/ksud.ko
-else
-    cp "$DB/kernelsu-android16-6.12.ko" /data/adb/ksud.ko
-fi
-# Install the ksud daemon
-mkdir -p /data/adb/ksu/bin
-cp "$DB/ksu-daemon" /data/adb/ksu/bin/ksud
-chmod 755 /data/adb/ksu/bin/ksud
-# Late-load: finit_module + syscall hooks + manager pairing
-/data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
-exit $?
+LOG=/data/local/tmp/dfsh.log
+{
+  echo "=== dfsh $(date) uid=$(id -u) ==="
+  mkdir -p /data/adb/ksu/bin
+  cp "$DB/ksu-daemon" /data/adb/ksu/bin/ksud
+  chmod 755 /data/adb/ksu/bin/ksud
+  /data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
+  echo "late-load rc=$?"
+  grep -c kernelsu /proc/modules || true
+} > "$LOG" 2>&1
+chmod 666 "$LOG"
+exit 0

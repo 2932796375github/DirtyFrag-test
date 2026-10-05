@@ -17,13 +17,23 @@ env:
 
 jobs:
   ksud:
-    name: Build ksud (arm64)
+    name: Build ksud (arm64, LKM packed)
     runs-on: ubuntu-latest
+    needs: [kernelsu-ko]
     steps:
       - uses: actions/checkout@v4
         with:
           repository: tiann/KernelSU
           fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: aarch64-*-lkm
+          path: lkm-stage
+      - name: Pack kernelsu.ko set into ksud assets
+        run: |
+          mkdir -p userspace/ksud/bin/aarch64
+          cp lkm-stage/aarch64-*-lkm/*_kernelsu.ko userspace/ksud/bin/aarch64/
+          ls -la userspace/ksud/bin/aarch64/
       - name: Setup rustup
         run: |
           rustup update stable
@@ -110,17 +120,13 @@ jobs:
   pack-apk:
     name: Pack DirtyFrag Universal APK
     runs-on: ubuntu-latest
-    needs: [kernelsu-ko, dirtyfrag-ko]
+    needs: [ksud, dirtyfrag-ko]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: dirtyfrag-*
           path: ko-stage
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: kernelsu-*
-          path: ksu-ko-stage
       - uses: actions/download-artifact@v4
         with:
           name: ksu-daemon
@@ -133,11 +139,7 @@ jobs:
           done
           ls -la app/src/main/jni/ko/
       - name: Place paired KSU assets
-        run: |
-          for kmi in android12-5.10 android13-5.10 android13-5.15 android14-5.15 android15-6.6 android16-6.12 android17-6.18; do
-            cp "ksu-ko-stage/kernelsu-$kmi/kernelsu-$kmi.ko" "app/src/main/assets/kernelsu-$kmi.ko"
-          done
-          cp daemon-stage/ksud app/src/main/assets/ksu-daemon
+        run: cp daemon-stage/ksud app/src/main/assets/ksu-daemon
           ls -la app/src/main/assets/
       - uses: actions/setup-java@v4
         with:
