@@ -21,4 +21,4 @@ release.keystore
 keystore.properties
 *.jks
 manager.apk
-.ksu-run-id
+
