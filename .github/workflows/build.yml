@@ -27,12 +27,16 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          pattern: aarch64-*-lkm
+          pattern: kernelsu-*
           path: lkm-stage
       - name: Pack kernelsu.ko set into ksud assets
         run: |
           mkdir -p userspace/ksud/bin/aarch64
-          cp lkm-stage/aarch64-*-lkm/*_kernelsu.ko userspace/ksud/bin/aarch64/
+          # ksud's asset lookup expects the {kmi}_kernelsu.ko naming
+          for d in lkm-stage/kernelsu-*; do
+            kmi=${d#lkm-stage/kernelsu-}
+            cp "$d/kernelsu-$kmi.ko" "userspace/ksud/bin/aarch64/${kmi}_kernelsu.ko"
+          done
           ls -la userspace/ksud/bin/aarch64/
       - name: Setup rustup
         run: |
