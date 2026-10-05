@@ -23,10 +23,7 @@ fi
 API() { curl -sf "${AUTH[@]}" "$@"; }
 
 if [[ -z "$RUN" ]]; then
-  # Walk recent successful runs newest-first and pick the first one that
-  # actually carries the full paired artifact set. Some upstream runs exit
-  # green with zero artifacts (mid-refactor), so success status alone is not
-  # enough.
+  # Walk recent successful runs newest-first; skip zero-artifact upstream runs
   RUN=$(API "https://api.github.com/repos/$REPO/actions/workflows/build-manager.yml/runs?status=success&per_page=30" |
     KSU_TOKEN="${GH_TOKEN:-${KSU_POLL_TOKEN:-}}" python3 -c '
 import json, sys, os, urllib.request
@@ -38,21 +35,31 @@ def artifacts(rid):
         req.add_header("Authorization", "Bearer " + tok)
     with urllib.request.urlopen(req) as r:
         return [a["name"] for a in json.load(r)["artifacts"]]
+found = ""
 for run in json.load(sys.stdin)["workflow_runs"]:
-    names = artifacts(run["id"])
+    try:
+        names = artifacts(run["id"])
+    except Exception as e:
+        print(f"[resolve] run {run['id']} listing error: {e}", file=sys.stderr)
+        continue
     manager = "manager-gradle" in names or "manager" in names
     probe = "aarch64-android16-6.12-lkm" in names
     daemon = "ksud-aarch64-linux-android" in names
     print(f"[resolve] run {run['id']} sha={run['head_sha'][:7]} artifacts={len(names)} mgr={manager} lkm={probe} daemon={daemon}", file=sys.stderr)
     if manager and probe and daemon:
-        print(run["id"]); break
-else:
+        found = run["id"]
+        break
+print(found)
+')
+  if [ -z "$RUN" ]; then
     if [ -f .ksu-run-id ] && [ -s .ksu-run-id ]; then
-        echo "[fetch-ksu] no complete recent run; falling back to pinned $(cat .ksu-run-id)" >&2
-        RUN=$(cat .ksu-run-id)
+      echo "[fetch-ksu] no complete recent upstream run; falling back to pinned $(cat .ksu-run-id)" >&2
+      RUN=$(cat .ksu-run-id)
     else
-        sys.exit("no upstream run carries a complete paired artifact set and no pinned .ksu-run-id") 
-    fi')
+      echo "[fetch-ksu] FATAL: no complete upstream run and no pinned .ksu-run-id" >&2
+      exit 1
+    fi
+  fi
 fi
 echo "[fetch-ksu] source run: https://github.com/$REPO/actions/runs/$RUN"
 mkdir -p "$OUT"
