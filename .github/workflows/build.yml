@@ -28,39 +28,13 @@ jobs:
       run_id: ${{ steps.pin.outputs.run_id }}
     steps:
       - id: pin
-        env:
-          GH_TOKEN: ${{ github.token }}
-          KSU_REF: ${{ inputs.ksu_ref }}
         run: |
-          # Pin the newest successful Build Manager run on main: its head_sha
-          # is guaranteed to have manager+ksud artifacts from the SAME commit,
-          # so manager/ksud/kernelsu.ko are always version-unified.
-          if [ -n "$KSU_REF" ]; then
-            SHA=$(git ls-remote "https://github.com/${{ env.KSU_REPO }}.git" "$KSU_REF" | awk '{print $1}' | head -1)
-            echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-            echo "pinned by explicit ref: $SHA"
-            exit 0
-          fi
-          # walk newest-first; pin the first run whose artifacts are COMPLETE
-          # (manager + ksud + LKM set). Some upstream runs exit green with
-          # zero artifacts (mid-refactor) - those break the build.
-          for RUN in $(gh api "repos/${{ env.KSU_REPO }}/actions/workflows/build-manager.yml/runs?status=success&per_page=15&head_branch=main" \
-            --jq '.workflow_runs[] | select(.event != "pull_request") | .id'); do
-            NAMES=$(gh api "repos/${{ env.KSU_REPO }}/actions/runs/$RUN/artifacts?per_page=100" \
-              --jq '[.artifacts[].name] | join(",")')
-            if echo "$NAMES" | grep -q "manager" && \
-               echo "$NAMES" | grep -q "ksud-aarch64-linux-android" && \
-               echo "$NAMES" | grep -q "aarch64-android16-6.12-lkm"; then
-              echo "complete artifact set found in run $RUN"
-              break
-            fi
-            RUN=""
-          done
-          [ -n "$RUN" ] || { echo "no upstream run with complete artifacts"; exit 1; }
-          SHA=$(gh api "repos/${{ env.KSU_REPO }}/actions/runs/$RUN" --jq '.head_sha')
-          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          REF="${{ inputs.ksu_ref }}"
+          [ -z "$REF" ] && REF="HEAD"
+          SHA=$(git ls-remote "https://github.com/${{ env.KSU_REPO }}.git" "$REF" | awk '{print $1}' | head -1)
+          [ -n "$SHA" ] || { echo "resolve failed"; exit 1; }
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "pinned KernelSU commit: $SHA (run $RUN)"
+          echo "pinned KernelSU commit: $SHA"
 
   ksud:
     name: Build ksud (arm64) @ pinned commit
