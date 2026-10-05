@@ -190,28 +190,41 @@ jobs:
         with:
           name: DirtyFrag-universal
           path: out/
-      - name: Fetch official manager built from the same commit
+      - name: Fetch OFFICIAL manager built from the same commit (no PR builds)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           SHA="${{ needs.resolve-ksu.outputs.sha }}"
-          # prefer the manager artifact from a CI run of the exact pinned commit
-          RUN=$(gh api "repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=30&head_sha=$SHA" \
-            --jq '.workflow_runs[0].id' 2>/dev/null || true)
-          if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
-            RUN=$(gh api "repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1" \
-              --jq '.workflow_runs[0].id')
-          fi
-          echo "manager source run: $RUN"
+          # only main-branch push/schedule runs; PR runs ship me.weishu.kernelsu.pr
+          # (temp keystore + different package) and would pollute the nightly
+          RUNS=$(gh api "repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=30" \
+            --jq '.workflow_runs[] | select(.head_branch == "main" and .event != "pull_request") | .id')
+          RUN=""
+          for r in $RUNS; do
+            if [ "$r" = "$SHA" ] || [ -z "$SHA" ]; then RUN=$r; break; fi
+            # prefer the run whose head_sha matches the pinned commit
+            H=$(gh api "repos/tiann/KernelSU/actions/runs/$r" --jq '.head_sha')
+            if [ "$H" = "$SHA" ]; then RUN=$r; break; fi
+            [ -z "$RUN" ] && RUN=$r   # keep the first main-branch run as fallback
+          done
+          [ -z "$RUN" ] && RUN=$(gh api "repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1&head_branch=main" --jq '.workflow_runs[0].id')
+          echo "manager source run: $RUN (main branch, non-PR)"
           for name in manager manager-gradle; do
             if curl -sfL -o mgr.zip "https://nightly.link/tiann/KernelSU/actions/runs/$RUN/$name.zip"; then
               rm -rf mgrx && mkdir mgrx && unzip -qo mgr.zip -d mgrx
               APK=$(find mgrx -name '*.apk' | head -1)
+              PKG=$($ANDROID_HOME/build-tools/36.0.0/aapt2 dump packagename "$APK" 2>/dev/null || echo unknown)
+              echo "manager package: $PKG"
+              if [ "$PKG" != "me.weishu.kernelsu" ]; then
+                echo "::error::manager package is $PKG, expected me.weishu.kernelsu (PR build leaked?)"
+                exit 1
+              fi
               cp "$APK" out/KernelSU-manager-arm64.apk
               echo "manager staged: $APK"
               break
             fi
           done
+          [ -f out/KernelSU-manager-arm64.apk ] || { echo "::error::no official manager artifact fetched"; exit 1; }
           ls -la out/
       - name: Publish rolling nightly
         env:
