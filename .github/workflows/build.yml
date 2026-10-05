@@ -21,19 +21,33 @@ env:
 
 jobs:
   resolve-ksu:
-    name: Pin KernelSU commit
+    name: Pin KernelSU commit (with CI artifacts)
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.pin.outputs.sha }}
+      run_id: ${{ steps.pin.outputs.run_id }}
     steps:
       - id: pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KSU_REF: ${{ inputs.ksu_ref }}
         run: |
-          REF="${{ inputs.ksu_ref }}"
-          [ -z "$REF" ] && REF="HEAD"
-          SHA=$(git ls-remote "https://github.com/${{ env.KSU_REPO }}.git" "$REF" | awk '{print $1}' | head -1)
-          case "$SHA" in [0-9a-f]*[0-9a-f]) ;; *) echo "resolve failed"; exit 1;; esac
+          # Pin the newest successful Build Manager run on main: its head_sha
+          # is guaranteed to have manager+ksud artifacts from the SAME commit,
+          # so manager/ksud/kernelsu.ko are always version-unified.
+          if [ -n "$KSU_REF" ]; then
+            SHA=$(git ls-remote "https://github.com/${{ env.KSU_REPO }}.git" "$KSU_REF" | awk '{print $1}' | head -1)
+            echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+            echo "pinned by explicit ref: $SHA"
+            exit 0
+          fi
+          RUN=$(gh api "repos/${{ env.KSU_REPO }}/actions/workflows/build-manager.yml/runs?status=success&per_page=10&head_branch=main" \
+            --jq '[.workflow_runs[] | select(.event != "pull_request")][0].id')
+          [ -n "$RUN" ] || { echo "no successful upstream run"; exit 1; }
+          SHA=$(gh api "repos/${{ env.KSU_REPO }}/actions/runs/$RUN" --jq '.head_sha')
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "pinned KernelSU commit: $SHA"
+          echo "pinned KernelSU commit: $SHA (run $RUN)"
 
   ksud:
     name: Build ksud (arm64) @ pinned commit
