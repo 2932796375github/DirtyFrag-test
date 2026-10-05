@@ -181,6 +181,10 @@ jobs:
           path: ko-stage
       - uses: actions/download-artifact@v4
         with:
+          pattern: kernelsu-*
+          path: ksu-ko-stage
+      - uses: actions/download-artifact@v4
+        with:
           name: ksu-daemon
           path: daemon-stage
       - name: Place dirtyfrag KO blobs
@@ -193,10 +197,9 @@ jobs:
       - name: Place paired KSU assets
         run: |
           for kmi in android12-5.10 android13-5.10 android13-5.15 android14-5.15 android15-6.6 android16-6.12 android17-6.18; do
-            cp "kernelsu-$kmi.ko" "app/src/main/assets/kernelsu-$kmi.ko" 2>/dev/null || \
-            cp "../kernelsu-$kmi.ko" "app/src/main/assets/kernelsu-$kmi.ko"
+            cp "ksu-ko-stage/kernelsu-$kmi/kernelsu-$kmi.ko" "app/src/main/assets/kernelsu-$kmi.ko"
           done
-          find . -name "ksud" -path "*ksu-daemon*" -exec cp {} app/src/main/assets/ksu-daemon \; 2>/dev/null || true
+          cp daemon-stage/ksud app/src/main/assets/ksu-daemon
           ls -la app/src/main/assets/
       - uses: actions/setup-java@v4
         with:
