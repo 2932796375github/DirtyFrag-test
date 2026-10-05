@@ -1,30 +1,145 @@
-name: Build DirtyFrag Universal
+name: Build DirtyFrag Universal (source)
 
 on:
+  schedule:
+    - cron: '0 17 */2 * *'   # every 2 days
   workflow_dispatch:
-    inputs:
-      ksu_run_id:
-        description: 'tiann/KernelSU CI run id to source the paired KSU set from (default: latest successful)'
-        required: false
-      ksu_ref:
-        description: 'Optional KernelSU git ref (builds kernelsu.ko + manager from source instead of fetching artifacts)'
-        required: false
-  repository_dispatch:
-    types: [ksu-update]
   push:
     branches: [master]
     paths:
       - 'app/**'
       - 'dirtyfrag-lkm/**'
-      - 'scripts/**'
       - '.github/workflows/build.yml'
 
 env:
-  KMIS: 'android12-5.10 android13-5.10 android13-5.15 android14-5.15 android15-6.6 android16-6.12 android17-6.18'
   DDK_RELEASE: '20260828'
+  KMIS: 'android12-5.10 android13-5.10 android13-5.15 android14-5.15 android15-6.6 android16-6.12 android17-6.18'
 
 jobs:
-  build-dirtyfrag-ko:
+  ksud:
+    name: Build ksud (arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: tiann/KernelSU
+          fetch-depth: 0
+      - name: Setup rustup
+        run: |
+          rustup update stable
+          rustup target add aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: userspace/ksud
+          cache-targets: false
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r29
+      - name: Build ksud
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          source .github/scripts/setup-rust-build.sh aarch64-linux-android 26
+          cargo build --target aarch64-linux-android --release --manifest-path ./userspace/ksud/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ksu-daemon
+          path: target/aarch64-linux-android/release/ksud
+
+  manager:
+    name: Build KernelSU Manager (arm64, paired keystore)
+    runs-on: ubuntu-latest
+    needs: [ksud]
+    outputs:
+      expected_size: ${{ steps.extract.outputs.expected_size }}
+      expected_hash: ${{ steps.extract.outputs.expected_hash }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: tiann/KernelSU
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: ksu-daemon
+          path: ksud-bin
+      - name: Place ksud into manager jniLibs
+        run: |
+          mkdir -p manager/app/src/main/jniLibs/arm64-v8a
+          cp ksud-bin/ksud manager/app/src/main/jniLibs/arm64-v8a/libksud.so
+      - name: Decode release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.RELEASE_KS_PASS }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > release.keystore
+          echo "KEYSTORE_FILE=$(pwd)/release.keystore"      > sign.properties
+          echo "KEYSTORE_PASSWORD=$KS_PASS"                >> sign.properties
+          echo "KEY_ALIAS=dirtyfrag"                       >> sign.properties
+          echo "KEY_PASSWORD=$KS_PASS"                     >> sign.properties
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Build manager
+        run: |
+          cd manager
+          ./gradlew clean assembleRelease \
+            -PKEYSTORE_FILE="$(pwd)/../release.keystore" \
+            -PKEYSTORE_PASSWORD="${{ secrets.RELEASE_KS_PASS }}" \
+            -PKEY_ALIAS=dirtyfrag \
+            -PKEY_PASSWORD="${{ secrets.RELEASE_KEY_PASS }}"
+      - name: Extract certificate size/hash (pins kernelsu.ko to this manager)
+        id: extract
+        env:
+          KS_PASS: ${{ secrets.RELEASE_KS_PASS }}
+        run: |
+          keytool -exportcert -alias dirtyfrag -keystore release.keystore \
+            -storepass "$KS_PASS" -file cert.der
+          SIZE_DEC=$(stat -c%s cert.der)
+          echo "expected_size=$(printf '0x%04x' "$SIZE_DEC")" >> "$GITHUB_OUTPUT"
+          echo "expected_hash=$(sha256sum cert.der | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manager
+          path: manager/app/build/outputs/apk/release/*.apk
+
+  kernelsu-ko:
+    name: Build kernelsu.ko (${{ matrix.kmi }})
+    runs-on: ubuntu-latest
+    needs: [manager]
+    strategy:
+      fail-fast: false
+      matrix:
+        kmi: [android12-5.10, android13-5.10, android13-5.15, android14-5.15, android15-6.6, android16-6.12, android17-6.18]
+    container:
+      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-${{ vars.DDK_RELEASE || '20260828' }}
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: tiann/KernelSU
+          fetch-depth: 0
+      - name: git safe.directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build kernelsu.ko (pinned to our manager signature)
+        env:
+          KSU_EXPECTED_SIZE2: ${{ needs.manager.outputs.expected_size }}
+          KSU_EXPECTED_HASH2: ${{ needs.manager.outputs.expected_hash }}
+        run: |
+          cd kernel
+          echo "KDIR=${KDIR:-<unset>}"
+          CONFIG_KSU=m CC=clang make
+          llvm-strip -d kernelsu.ko
+          cp kernelsu.ko ../kernelsu-${{ matrix.kmi }}.ko
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernelsu-${{ matrix.kmi }}
+          path: kernelsu-${{ matrix.kmi }}.ko
+
+  dirtyfrag-ko:
+    name: Build dirtyfrag.ko (${{ matrix.kmi }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -37,12 +152,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: git safe.directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build dirtyfrag.ko for ${{ matrix.kmi }}
+      - name: Build dirtyfrag.ko
         run: |
           cd dirtyfrag-lkm
           echo "KDIR=${KDIR:-<unset>}"
           make
-          # page-write size diet (upstream build.sh recipe)
           llvm-objcopy --strip-unneeded \
             -R .comment -R .note.gnu.build-id -R .note.gnu.property -R .note.Linux -R .note.GNU-stack \
             -R .BTF -R .BTF.base -R .llvm_addrsig \
@@ -55,37 +169,20 @@ jobs:
           name: dirtyfrag-${{ matrix.kmi }}
           path: dirtyfrag-${{ matrix.kmi }}.ko
 
-  fetch-ksu-set:
-    runs-on: ubuntu-latest
-    outputs:
-      run_id: ${{ steps.fetch.outputs.run_id }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Fetch paired KSU artifact set
-        id: fetch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/fetch-ksu.sh "${{ inputs.ksu_run_id }}" app/src/main/assets
-          echo "run_id=$(cat .ksu-run-id)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ksu-set
-          path: |
-            app/src/main/assets/
-            manager.apk
-            .github/ksu-run-id
-
   pack-apk:
+    name: Pack DirtyFrag Universal APK
     runs-on: ubuntu-latest
-    needs: [build-dirtyfrag-ko, fetch-ksu-set]
+    needs: [manager, kernelsu-ko, dirtyfrag-ko]
     steps:
       - uses: actions/checkout@v4
-      - name: Download KO matrix
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: dirtyfrag-*
           path: ko-stage
+      - uses: actions/download-artifact@v4
+        with:
+          name: ksu-daemon
+          path: daemon-stage
       - name: Place dirtyfrag KO blobs
         run: |
           for d in ko-stage/dirtyfrag-*; do
@@ -93,57 +190,50 @@ jobs:
             cp "$d/dirtyfrag-$kmi.ko" "app/src/main/jni/ko/dirtyfrag-$kmi.ko"
           done
           ls -la app/src/main/jni/ko/
-      - name: Download paired KSU set
-        uses: actions/download-artifact@v4
-        with:
-          name: ksu-set
-          path: ksu-stage
-      - name: Place KSU assets
+      - name: Place paired KSU assets
         run: |
-          cp ksu-stage/app/src/main/assets/kernelsu-*.ko app/src/main/assets/ 2>/dev/null || true
-          cp ksu-stage/app/src/main/assets/ksu-daemon app/src/main/assets/
-          cp ksu-stage/app/src/main/assets/dfsh app/src/main/assets/
+          for kmi in android12-5.10 android13-5.10 android13-5.15 android14-5.15 android15-6.6 android16-6.12 android17-6.18; do
+            cp "kernelsu-$kmi.ko" "app/src/main/assets/kernelsu-$kmi.ko" 2>/dev/null || \
+            cp "../kernelsu-$kmi.ko" "app/src/main/assets/kernelsu-$kmi.ko"
+          done
+          find . -name "ksud" -path "*ksu-daemon*" -exec cp {} app/src/main/assets/ksu-daemon \; 2>/dev/null || true
           ls -la app/src/main/assets/
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
       - name: Build + sign APK
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.RELEASE_KS_PASS }}
           KEY_PASS: ${{ secrets.RELEASE_KEY_PASS }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > release.keystore
-            echo "android.injected.signing.store.file=$(pwd)/release.keystore"     >> keystore.properties
-            echo "android.injected.signing.store.password=$KS_PASS"               >> keystore.properties
-            echo "android.injected.signing.key.alias=dirtyfrag"                   >> keystore.properties
-            echo "android.injected.signing.key.password=$KEY_PASS"                >> keystore.properties
-          else
-            echo "::warning::RELEASE_KEYSTORE_B64 not set - APK will be unsigned (debug-sign locally)"
-          fi
+          echo "$KEYSTORE_B64" | base64 -d > release.keystore
+          echo "android.injected.signing.store.file=$(pwd)/release.keystore" >> keystore.properties
+          echo "android.injected.signing.store.password=$KS_PASS"           >> keystore.properties
+          echo "android.injected.signing.key.alias=dirtyfrag"               >> keystore.properties
+          echo "android.injected.signing.key.password=$KEY_PASS"            >> keystore.properties
           ./gradlew :app:assembleRelease
           mkdir -p out
-          if compgen -G "app/build/outputs/apk/release/*-release*.apk" > /dev/null; then
-            cp app/build/outputs/apk/release/*-release*.apk out/DirtyFrag-universal.apk
-          else
-            cp app/build/outputs/apk/release/*.apk out/DirtyFrag-universal.apk
-          fi
-          ls -la out/
-      - name: Include paired manager APK
-        run: cp ksu-stage/manager.apk out/manager.apk 2>/dev/null || cp ksu-stage/app/src/main/manager.apk out/manager.apk
-      - name: sha256
-        run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
+          cp app/build/outputs/apk/release/*.apk out/DirtyFrag-universal.apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: manager
+          path: out/manager
+      - name: Collect outputs
+        run: |
+          mv out/manager/*.apk out/KernelSU-manager-arm64.apk 2>/dev/null || true
+          rmdir out/manager 2>/dev/null || true
+          cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: DirtyFrag-universal
           path: out/
 
   nightly:
+    name: Publish rolling nightly
     runs-on: ubuntu-latest
-    needs: [pack-apk, fetch-ksu-set]
+    needs: [pack-apk]
     permissions:
       contents: write
     steps:
@@ -152,18 +242,11 @@ jobs:
         with:
           name: DirtyFrag-universal
           path: out/
-      - name: Update pinned run id
-        run: |
-          echo "${{ needs.fetch-ksu-set.outputs.run_id }}" > .ksu-run-id
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .ksu-run-id
-          git diff --cached --quiet || git commit -m "ci: pin ksu source run ${{ needs.fetch-ksu-set.outputs.run_id }}"
-          git push
       - name: Publish rolling nightly
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
-          gh release create nightly out/* --title "nightly $(date +%Y%m%d-%H%M) (ksu run ${{ needs.fetch-ksu-set.outputs.run_id }})" \
-            --notes "Rolling nightly. KSU source run: https://github.com/tiann/KernelSU/actions/runs/${{ needs.fetch-ksu-set.outputs.run_id }} — manager + all KMI kernelsu.ko mutually paired; install manager.apk first."
+          gh release create nightly out/* \
+            --title "nightly $(date +%Y%m%d-%H%M)" \
+            --notes "Rolling nightly, built from source. KernelSU Manager (arm64) + DirtyFrag Universal APK are mutually signature-paired. Install manager first, then DirtyFrag, tap once."
