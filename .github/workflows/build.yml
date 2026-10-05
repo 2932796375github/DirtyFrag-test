@@ -193,6 +193,10 @@ jobs:
       - name: Fetch OFFICIAL manager built from the same commit (no PR builds)
         env:
           GH_TOKEN: ${{ github.token }}
+      - uses: android-actions/setup-android@v3
+      - name: Fetch OFFICIAL manager built from the same commit (no PR builds)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           SHA="${{ needs.resolve-ksu.outputs.sha }}"
           # only main-branch push/schedule runs; PR runs ship me.weishu.kernelsu.pr
@@ -213,7 +217,8 @@ jobs:
             if curl -sfL -o mgr.zip "https://nightly.link/tiann/KernelSU/actions/runs/$RUN/$name.zip"; then
               rm -rf mgrx && mkdir mgrx && unzip -qo mgr.zip -d mgrx
               APK=$(find mgrx -name '*.apk' | head -1)
-              PKG=$($ANDROID_HOME/build-tools/36.0.0/aapt2 dump packagename "$APK" 2>/dev/null || echo unknown)
+              AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)
+              PKG=$("$AAPT2" dump packagename "$APK" 2>/dev/null || echo unknown)
               echo "manager package: $PKG"
               if [ "$PKG" != "me.weishu.kernelsu" ]; then
                 echo "::error::manager package is $PKG, expected me.weishu.kernelsu (PR build leaked?)"
