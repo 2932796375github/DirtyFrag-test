@@ -1,6 +1,5 @@
 #!/system/bin/sh
-# DirtyFrag Universal - executed as uid 0 by dirtyfrag.ko UMH (SELinux permissive).
-# ksud embeds the per-KMI kernelsu.ko set; late-load loads it from memory.
+# DirtyFrag Universal - uid 0 UMH payload: full diagnostics + multi-path KSU load
 DB=/data/user_de/0/df.root
 LOG1=/data/local/tmp/dfsh.log
 LOG2="$DB/files/dfsh.log"
@@ -8,25 +7,44 @@ API=$(uname -r | sed -n 's/.*android\([0-9]*\)-.*/\1/p')
 KV=$(uname -r | cut -d. -f1-2)
 KMI="android${API}-${KV}"
 {
-  echo "=== dfsh: KernelSU late-load ==="
-  echo "time : $(date)"
-  echo "uid  : $(id -u)  (kernel-spawned UMH, no seccomp)"
-  echo "kmi  : $KMI"
-  echo "ko   : $DB/kernelsu-$KMI.ko ($(stat -c%s "$DB/kernelsu-$KMI.ko" 2>/dev/null || echo '?') bytes)"
+  echo "=== dfsh v3: KernelSU late-load diag ==="
+  echo "time: $(date) | uid: $(id -u) | uname: $(uname -r)"
+  echo "kmi: $KMI"
   echo ""
-  echo "-- step 1: install ksud daemon"
-  mkdir -p /data/adb/ksu/bin
-  cp "$DB/ksu-daemon" /data/adb/ksu/bin/ksud
-  chmod 755 /data/adb/ksu/bin/ksud
-  echo "       installed -> /data/adb/ksu/bin/ksud"
+  echo "-- [0] staged files --"
+  ls -la "$DB" 2>&1
+  ls -la /data/adb/ksu/bin/ 2>&1
   echo ""
-  echo "-- step 2: ksud late-load (module from embedded assets)"
-  RUST_LOG=info /data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
-  RC=$?
-  MOD=$(grep -c kernelsu /proc/modules)
+  echo "-- [1] ksud identity --"
+  ls -la /data/adb/ksu/bin/ksud 2>&1
+  md5sum /data/adb/ksu/bin/ksud 2>/dev/null
   echo ""
-  echo "late-load rc=$RC"
-  echo "module loaded: $MOD (1 = ok)"
+  echo "-- [2] previous ksud logs --"
+  cat /data/adb/ksu/log/*.log 2>/dev/null | tail -40
+  echo ""
+  echo "-- [3] ksud late-load (RUST_LOG=trace) --"
+  RUST_LOG=trace /data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
+  echo "late-load rc=$?"
+  sleep 5
+  echo "module count after 5s: $(grep -c kernelsu /proc/modules)"
+  echo ""
+  echo "-- [4] ksud daemon logs after run --"
+  cat /data/adb/ksu/log/*.log 2>/dev/null | tail -40
+  echo ""
+  echo "-- [5] fallback: ksuinit direct module load --"
+  if [ -x "$DB/ksuinit" ]; then
+    insmod /data/adb/ksud.ko 2>&1
+    echo "raw insmod rc=$? (expected fail if vermagic mismatch)"
+    "$DB/ksuinit" load /data/adb/ksud.ko 2>&1
+    echo "ksuinit rc=$?"
+  else
+    echo "ksuinit binary not staged"
+  fi
+  sleep 3
+  echo "module count final: $(grep -c kernelsu /proc/modules)"
+  echo ""
+  echo "-- [6] dmesg KernelSU/insmod lines --"
+  dmesg 2>/dev/null | grep -iE "kernelsu|insmod|module" | tail -20
   echo "=== dfsh done ==="
 } > "$LOG1" 2>&1
 cp "$LOG1" "$LOG2"
