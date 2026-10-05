@@ -41,9 +41,22 @@ jobs:
             echo "pinned by explicit ref: $SHA"
             exit 0
           fi
-          RUN=$(gh api "repos/${{ env.KSU_REPO }}/actions/workflows/build-manager.yml/runs?status=success&per_page=10&head_branch=main" \
-            --jq '[.workflow_runs[] | select(.event != "pull_request")][0].id')
-          [ -n "$RUN" ] || { echo "no successful upstream run"; exit 1; }
+          # walk newest-first; pin the first run whose artifacts are COMPLETE
+          # (manager + ksud + LKM set). Some upstream runs exit green with
+          # zero artifacts (mid-refactor) - those break the build.
+          for RUN in $(gh api "repos/${{ env.KSU_REPO }}/actions/workflows/build-manager.yml/runs?status=success&per_page=15&head_branch=main" \
+            --jq '.workflow_runs[] | select(.event != "pull_request") | .id'); do
+            NAMES=$(gh api "repos/${{ env.KSU_REPO }}/actions/runs/$RUN/artifacts?per_page=100" \
+              --jq '[.artifacts[].name] | join(",")')
+            if echo "$NAMES" | grep -q "manager" && \
+               echo "$NAMES" | grep -q "ksud-aarch64-linux-android" && \
+               echo "$NAMES" | grep -q "aarch64-android16-6.12-lkm"; then
+              echo "complete artifact set found in run $RUN"
+              break
+            fi
+            RUN=""
+          done
+          [ -n "$RUN" ] || { echo "no upstream run with complete artifacts"; exit 1; }
           SHA=$(gh api "repos/${{ env.KSU_REPO }}/actions/runs/$RUN" --jq '.head_sha')
           echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
