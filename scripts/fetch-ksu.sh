@@ -27,7 +27,7 @@ if [[ -z "$RUN" ]]; then
   # actually carries the full paired artifact set. Some upstream runs exit
   # green with zero artifacts (mid-refactor), so success status alone is not
   # enough.
-  RUN=$(API "https://api.github.com/repos/$REPO/actions/workflows/build-manager.yml/runs?status=success&per_page=15" |
+  RUN=$(API "https://api.github.com/repos/$REPO/actions/workflows/build-manager.yml/runs?status=success&per_page=30" |
     KSU_TOKEN="${GH_TOKEN:-${KSU_POLL_TOKEN:-}}" python3 -c '
 import json, sys, os, urllib.request
 def artifacts(rid):
@@ -43,10 +43,16 @@ for run in json.load(sys.stdin)["workflow_runs"]:
     manager = "manager-gradle" in names or "manager" in names
     probe = "aarch64-android16-6.12-lkm" in names
     daemon = "ksud-aarch64-linux-android" in names
+    print(f"[resolve] run {run['id']} sha={run['head_sha'][:7]} artifacts={len(names)} mgr={manager} lkm={probe} daemon={daemon}", file=sys.stderr)
     if manager and probe and daemon:
         print(run["id"]); break
 else:
-    sys.exit("no upstream run carries a complete paired artifact set")')
+    if [ -f .ksu-run-id ] && [ -s .ksu-run-id ]; then
+        echo "[fetch-ksu] no complete recent run; falling back to pinned $(cat .ksu-run-id)" >&2
+        RUN=$(cat .ksu-run-id)
+    else
+        sys.exit("no upstream run carries a complete paired artifact set and no pinned .ksu-run-id") 
+    fi')
 fi
 echo "[fetch-ksu] source run: https://github.com/$REPO/actions/runs/$RUN"
 mkdir -p "$OUT"
