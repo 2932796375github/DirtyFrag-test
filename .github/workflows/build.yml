@@ -60,12 +60,25 @@ jobs:
       fail-fast: false
       matrix:
         kmi: [android12-5.10, android13-5.10, android13-5.15, android14-5.15, android15-6.6, android16-6.12, android17-6.18]
+    container:
+      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-${{ vars.DDK_RELEASE || '20260828' }}
+      options: --privileged
     steps:
       - uses: actions/checkout@v4
+      - name: git safe.directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build dirtyfrag.ko for ${{ matrix.kmi }}
         run: |
           cd dirtyfrag-lkm
+          echo "KDIR=${KDIR:-<unset>}"
           make
+          # page-write size diet (upstream build.sh recipe)
+          llvm-objcopy --strip-unneeded \
+            -R .comment -R .note.gnu.build-id -R .note.gnu.property -R .note.Linux -R .note.GNU-stack \
+            -R .BTF -R .BTF.base -R .llvm_addrsig \
+            -R .hyp.text -R .hyp.bss -R .hyp.rodata -R .hyp.event_ids \
+            -R .hyp.patchable_function_entries -R .hyp.data \
+            dirtyfrag.ko 2>/dev/null || true
           cp dirtyfrag.ko ../dirtyfrag-${{ matrix.kmi }}.ko
       - uses: actions/upload-artifact@v4
         with:
