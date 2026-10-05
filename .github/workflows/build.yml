@@ -143,7 +143,9 @@ jobs:
           done
           ls -la app/src/main/jni/ko/
       - name: Place paired KSU assets
-        run: cp daemon-stage/ksud app/src/main/assets/ksu-daemon
+        run: |
+          cp daemon-stage/ksud app/src/main/assets/ksu-daemon
+          chmod 755 app/src/main/assets/ksu-daemon
           ls -la app/src/main/assets/
       - uses: actions/setup-java@v4
         with:
