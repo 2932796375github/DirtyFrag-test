@@ -23,3 +23,4 @@ keystore.properties
 manager.apk
 
 release.keystore.b64
+!app/keystore.jks

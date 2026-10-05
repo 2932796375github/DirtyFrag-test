@@ -144,14 +144,10 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Build + sign APK
-        env:
-          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
-          KS_PASS: ${{ secrets.RELEASE_KS_PASS }}
-          KEY_PASS: ${{ secrets.RELEASE_KEY_PASS }}
         run: |
-          # the app's signingConfig 'keystore' expects app/keystore.jks with
-          # the hardcoded dirtyfrag/dirtyfrag credentials (public by design)
-          echo "$KEYSTORE_B64" | base64 -d > app/keystore.jks
+          # app/keystore.jks is committed: its password/alias are already
+          # public in build.gradle.kts (upstream convention), so the file
+          # carries no secret - it only pins the update-in-place identity
           ./gradlew :app:assembleRelease
           mkdir -p out
           cp app/build/outputs/apk/release/dirtyfrag.apk out/DirtyFrag-universal.apk
