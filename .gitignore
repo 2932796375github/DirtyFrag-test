@@ -17,3 +17,8 @@ dirtyfrag-lkm/modules.order
 dirtyfrag-lkm/Module.symvers
 app/keystore.jks
 *.log
+release.keystore
+keystore.properties
+*.jks
+manager.apk
+.ksu-run-id

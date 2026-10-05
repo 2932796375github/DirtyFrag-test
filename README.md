@@ -75,3 +75,29 @@ The exploit uses this primitive to patch shellcode into `libc++.so` in the kerne
    - Calls `call_usermodehelper` to launch the `ksud` binary from our app's data dir
    - Module returns `-E2BIG` immediately after to self-unload
 
+
+
+## Universal build (this fork)
+
+One tap = SELinux permissive + KernelSU jailbreak, no adb staging, no rootd.
+
+- `dirtyfrag.ko` UMH payload is `dfsh` (app-protected dir, same-length path swap)
+- `dfsh` installs the paired `kernelsu-{kmi}.ko` + `ksud` by runtime uname KMI
+  match, then runs `ksud late-load` — Manager shows jailbreak mode
+- KSU artifacts are fetched from the latest tiann/KernelSU main-branch run
+  (stable keystore: manager and all KMI modules mutually paired); CI
+  re-triggers automatically when that run id moves (`check-upstream.yml`)
+
+| KMI | Status |
+|-----|--------|
+| android12-5.10 | verified upstream |
+| android13-5.10 | untested |
+| android13-5.15 | verified upstream |
+| android14-5.15 | untested |
+| android14-6.1 | NOT SUPPORTED - accidental mitigation (V4bel/dirtyfrag#23) |
+| android15-6.6 | verified upstream |
+| android16-6.12 | verified on-device (YLP-W00) |
+| android17-6.18 | untested |
+
+Local prep: `./scripts/fetch-ksu.sh` then `./build.sh`. Release keystore via
+secrets `RELEASE_KEYSTORE_B64` / `RELEASE_KS_PASS` / `RELEASE_KEY_PASS`.

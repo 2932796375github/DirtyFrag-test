@@ -20,6 +20,7 @@ if [[ -z "$RUN" ]]; then
     python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
 fi
 echo "[fetch-ksu] source run: https://github.com/$REPO/actions/runs/$RUN"
+mkdir -p "$OUT"
 echo "$RUN" > "$(dirname "$0")/../.ksu-run-id"
 
 TMP=$(mktemp -d)

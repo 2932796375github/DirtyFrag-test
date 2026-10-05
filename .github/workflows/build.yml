@@ -145,6 +145,8 @@ jobs:
             cp app/build/outputs/apk/release/*.apk out/DirtyFrag-universal.apk
           fi
           ls -la out/
+      - name: Include paired manager APK
+        run: cp ksu-stage/manager.apk out/manager.apk 2>/dev/null || cp ksu-stage/app/src/main/manager.apk out/manager.apk
       - name: sha256
         run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
       - uses: actions/upload-artifact@v4
