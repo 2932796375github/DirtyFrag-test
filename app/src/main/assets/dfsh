@@ -4,15 +4,32 @@
 DB=/data/user_de/0/df.root
 LOG1=/data/local/tmp/dfsh.log
 LOG2="$DB/files/dfsh.log"
+API=$(uname -r | sed -n 's/.*android\([0-9]*\)-.*/\1/p')
+KV=$(uname -r | cut -d. -f1-2)
+KMI="android${API}-${KV}"
 {
-  echo "=== dfsh $(date) uid=$(id -u) ==="
+  echo "=== dfsh: KernelSU late-load ==="
+  echo "time : $(date)"
+  echo "uid  : $(id -u)  (kernel-spawned UMH, no seccomp)"
+  echo "kmi  : $KMI"
+  echo "ko   : $DB/kernelsu-$KMI.ko ($(stat -c%s "$DB/kernelsu-$KMI.ko" 2>/dev/null || echo '?') bytes)"
+  echo ""
+  echo "-- step 1: install ksud daemon"
   mkdir -p /data/adb/ksu/bin
   cp "$DB/ksu-daemon" /data/adb/ksu/bin/ksud
   chmod 755 /data/adb/ksu/bin/ksud
-  /data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
-  echo "late-load rc=$?"
-  grep -c kernelsu /proc/modules || true
+  echo "       installed -> /data/adb/ksu/bin/ksud"
+  echo ""
+  echo "-- step 2: ksud late-load (module from embedded assets)"
+  RUST_LOG=info /data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
+  RC=$?
+  MOD=$(grep -c kernelsu /proc/modules)
+  echo ""
+  echo "late-load rc=$RC"
+  echo "module loaded: $MOD (1 = ok)"
+  echo "=== dfsh done ==="
 } > "$LOG1" 2>&1
 cp "$LOG1" "$LOG2"
-chmod 666 "$LOG1" "$LOG2"
+chmod 666 "$LOG1"
+chmod 644 "$LOG2"
 exit 0

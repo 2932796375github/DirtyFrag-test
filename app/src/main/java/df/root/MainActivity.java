@@ -83,7 +83,14 @@ public class MainActivity extends AppCompatActivity implements IReporter {
                 t = stripHeader(t);
                 appendLog(t);
             }
-            binding.outputScroll.post(() -> binding.outputScroll.fullScroll(View.FOCUS_DOWN));
+            // auto-scroll only when the user is already reading at the bottom;
+            // otherwise a background merge (dfsh poll) yanks the view around
+            binding.outputScroll.post(() -> {
+                ScrollView sc = binding.outputScroll;
+                int max = binding.outputView.getHeight() + binding.outputView.getPaddingBottom()
+                        - sc.getHeight();
+                if (sc.getScrollY() >= max - 40) sc.fullScroll(View.FOCUS_DOWN);
+            });
         });
     }
 
@@ -356,7 +363,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         }
 
         updateLogVisibility();
-        mMain.post(dfshPoll); // merge the dfsh UMH log into the on-screen log
 
         // Restore the simple status for the current state: rooted device or a
         // successful last run -> 100% + Verified; failed run -> Failed.
@@ -379,6 +385,10 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             // Two-tap confirmation: first tap arms ("Are you sure"), second runs.
             if (!runArmed) {
                 runArmed = true;
+                // dfsh log: start merging from the file's current end (skip history)
+                java.io.File dlf = dfshLogFile();
+                dfshLogPos = dlf.exists() ? dlf.length() : 0;
+                mMain.post(dfshPoll);
                 v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 binding.btnRun.setText("Are you sure");
                 return;
