@@ -136,7 +136,7 @@ jobs:
   pack-apk:
     name: Pack DirtyFrag Universal APK
     runs-on: ubuntu-latest
-    needs: [kernelsu-ko, dirtyfrag-ko]
+    needs: [ksud, kernelsu-ko, dirtyfrag-ko]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
