@@ -60,9 +60,9 @@ jobs:
     outputs:
       run_id: ${{ steps.fetch.outputs.run_id }}
     steps:
-      - id: fetch
       - uses: actions/checkout@v4
       - name: Fetch paired KSU artifact set
+        id: fetch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -166,4 +166,4 @@ jobs:
         run: |
           gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
           gh release create nightly out/* --title "nightly $(date +%Y%m%d-%H%M) (ksu run ${{ needs.fetch-ksu-set.outputs.run_id }})" \
-            --notes "Rolling nightly. KSU source run: https://github.com/tiann/KernelSU/actions/runs/${{ needs.fetch-ksu-set.outputs.run_id }} — manager + all KMI kernelsu.ko mutually paired; install manager.apk first.""
+            --notes "Rolling nightly. KSU source run: https://github.com/tiann/KernelSU/actions/runs/${{ needs.fetch-ksu-set.outputs.run_id }} — manager + all KMI kernelsu.ko mutually paired; install manager.apk first."
