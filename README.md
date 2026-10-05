@@ -94,7 +94,7 @@ One tap = SELinux permissive + KernelSU jailbreak, no adb staging, no rootd.
 | android13-5.10 | untested |
 | android13-5.15 | verified upstream |
 | android14-5.15 | untested |
-| android14-6.1 | NOT SUPPORTED - accidental mitigation (V4bel/dirtyfrag#23) |
+| android14-6.1 | NOT SUPPORTED - accidental mitigation (the V4bel DirtyFrag repo, issue 23) |
 | android15-6.6 | verified upstream |
 | android16-6.12 | verified on-device (YLP-W00) |
 | android17-6.18 | untested |
