@@ -1,0 +1,39 @@
+name: Check KernelSU upstream
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'   # every 6h, offset to avoid the top-of-hour rush
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve latest successful upstream build-manager run
+        id: resolve
+        run: |
+          RUN=$(curl -sf "https://api.github.com/repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1" | \
+            python3 -c 'import json,sys; r=json.load(sys.stdin)["workflow_runs"][0]; print(r["id"], r["head_sha"])')
+          echo "run_id=$(echo $RUN | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(echo $RUN | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Compare with pinned run
+        id: cmp
+        run: |
+          OLD=$(cat .ksu-run-id 2>/dev/null || echo none)
+          NEW=${{ steps.resolve.outputs.run_id }}
+          echo "pinned=$OLD upstream=$NEW"
+          if [ "$OLD" != "$NEW" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Dispatch build
+        if: steps.cmp.outputs.changed == 'true'
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/dispatches" \
+            -f event_type=ksu-update \
+            -F 'client_payload[sha]=${{ steps.resolve.outputs.sha }}'
+          echo "dispatched ksu-update for run ${{ steps.resolve.outputs.run_id }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,181 @@
+name: Build DirtyFrag Universal
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_run_id:
+        description: 'tiann/KernelSU CI run id to source the paired KSU set from (default: latest successful)'
+        required: false
+      ksu_ref:
+        description: 'Optional KernelSU git ref (builds kernelsu.ko + manager from source instead of fetching artifacts)'
+        required: false
+  repository_dispatch:
+    types: [ksu-update]
+  push:
+    branches: [master]
+    paths:
+      - 'app/**'
+      - 'dirtyfrag-lkm/**'
+      - 'scripts/**'
+      - '.github/workflows/build.yml'
+
+env:
+  KMIS: 'android12-5.10 android13-5.10 android13-5.15 android14-5.15 android15-6.6 android16-6.12 android17-6.18'
+  DDK_RELEASE: '20260828'
+
+jobs:
+  resolve-ksu:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.resolve.outputs.run_id }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - id: resolve
+        run: |
+          if [ -n "${{ inputs.ksu_run_id }}" ]; then
+            echo "run_id=${{ inputs.ksu_run_id }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.client_payload.sha }}" ]; then
+            # map the upstream SHA to the latest run containing it
+            SHA="${{ github.event.client_payload.sha }}"
+            RUN=$(curl -sf "https://api.github.com/repos/tiann/KernelSU/actions/runs?status=success&per_page=30&head_sha=$SHA" | \
+              python3 -c 'import json,sys; rs=json.load(sys.stdin)["workflow_runs"]; print(rs[0]["id"] if rs else "")')
+            if [ -z "$RUN" ]; then echo "no CI run for $SHA yet; falling back to latest"; fi
+            if [ -z "$RUN" ]; then
+              RUN=$(curl -sf "https://api.github.com/repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1" | \
+                python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
+            fi
+            echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          else
+            RUN=$(curl -sf "https://api.github.com/repos/tiann/KernelSU/actions/workflows/build-manager.yml/runs?status=success&per_page=1" | \
+              python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
+            echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha=${{ github.event.client_payload.sha }}" >> "$GITHUB_OUTPUT"
+          echo "resolved run: $(cat "$GITHUB_OUTPUT" | grep run_id)"
+
+  build-dirtyfrag-ko:
+    runs-on: ubuntu-latest
+    needs: [resolve-ksu]
+    strategy:
+      fail-fast: false
+      matrix:
+        kmi: [android12-5.10, android13-5.10, android13-5.15, android14-5.15, android15-6.6, android16-6.12, android17-6.18]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dirtyfrag.ko for ${{ matrix.kmi }}
+        run: |
+          cd dirtyfrag-lkm
+          make
+          cp dirtyfrag.ko ../dirtyfrag-${{ matrix.kmi }}.ko
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dirtyfrag-${{ matrix.kmi }}
+          path: dirtyfrag-${{ matrix.kmi }}.ko
+
+  fetch-ksu-set:
+    runs-on: ubuntu-latest
+    needs: [resolve-ksu]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch paired KSU artifact set
+        run: ./scripts/fetch-ksu.sh "${{ needs.resolve-ksu.outputs.run_id }}" app/src/main/assets
+      - name: Record upstream run id
+        run: cp .ksu-run-id .github/ksu-run-id
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ksu-set
+          path: |
+            app/src/main/assets/
+            manager.apk
+            .github/ksu-run-id
+
+  pack-apk:
+    runs-on: ubuntu-latest
+    needs: [resolve-ksu, build-dirtyfrag-ko, fetch-ksu-set]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download KO matrix
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dirtyfrag-*
+          path: ko-stage
+      - name: Place dirtyfrag KO blobs
+        run: |
+          for d in ko-stage/dirtyfrag-*; do
+            kmi=${d#ko-stage/dirtyfrag-}
+            cp "$d/dirtyfrag-$kmi.ko" "app/src/main/jni/ko/dirtyfrag-$kmi.ko"
+          done
+          ls -la app/src/main/jni/ko/
+      - name: Download paired KSU set
+        uses: actions/download-artifact@v4
+        with:
+          name: ksu-set
+          path: ksu-stage
+      - name: Place KSU assets
+        run: |
+          cp ksu-stage/app/src/main/assets/kernelsu-*.ko app/src/main/assets/ 2>/dev/null || true
+          cp ksu-stage/app/src/main/assets/ksu-daemon app/src/main/assets/
+          cp ksu-stage/app/src/main/assets/dfsh app/src/main/assets/
+          ls -la app/src/main/assets/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Build + sign APK
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.RELEASE_KS_PASS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.keystore
+            echo "android.injected.signing.store.file=$(pwd)/release.keystore"     >> keystore.properties
+            echo "android.injected.signing.store.password=$KS_PASS"               >> keystore.properties
+            echo "android.injected.signing.key.alias=dirtyfrag"                   >> keystore.properties
+            echo "android.injected.signing.key.password=$KEY_PASS"                >> keystore.properties
+          else
+            echo "::warning::RELEASE_KEYSTORE_B64 not set - APK will be unsigned (debug-sign locally)"
+          fi
+          ./gradlew :app:assembleRelease
+          mkdir -p out
+          if compgen -G "app/build/outputs/apk/release/*-release*.apk" > /dev/null; then
+            cp app/build/outputs/apk/release/*-release*.apk out/DirtyFrag-universal.apk
+          else
+            cp app/build/outputs/apk/release/*.apk out/DirtyFrag-universal.apk
+          fi
+          ls -la out/
+      - name: sha256
+        run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DirtyFrag-universal
+          path: out/
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [pack-apk, resolve-ksu]
+    if: github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: DirtyFrag-universal
+          path: out/
+      - name: Update pinned run id
+        run: |
+          echo "${{ needs.resolve-ksu.outputs.run_id }}" > .ksu-run-id
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .ksu-run-id
+          git diff --cached --quiet || git commit -m "ci: pin ksu source run ${{ needs.resolve-ksu.outputs.run_id }}"
+          git push
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="df$(date +%Y%m%d)-ksu${{ needs.resolve-ksu.outputs.run_id }}"
+          gh release create "$TAG" out/* --title "$TAG" \
+            --notes "KSU source run: https://github.com/tiann/KernelSU/actions/runs/${{ needs.resolve-ksu.outputs.run_id }} — manager + all KMI kernelsu.ko mutually paired; install manager.apk first."
