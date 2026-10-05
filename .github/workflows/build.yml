@@ -15,6 +15,10 @@ on:
       - 'dirtyfrag-lkm/**'
       - '.github/workflows/build.yml'
 
+concurrency:
+  group: dirtyfrag-build
+  cancel-in-progress: true
+
 env:
   DDK_RELEASE: '20260828'
   KSU_REPO: tiann/KernelSU
