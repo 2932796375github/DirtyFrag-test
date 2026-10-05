@@ -1,8 +1,8 @@
 name: Build DirtyFrag Universal (source)
 
 on:
-  schedule:
-    - cron: '0 17 */2 * *'   # every 2 days
+  repository_dispatch:
+    types: [ksu-update]
   workflow_dispatch:
     inputs:
       ksu_ref:
@@ -29,9 +29,13 @@ jobs:
     steps:
       - id: pin
         run: |
-          REF="${{ inputs.ksu_ref }}"
-          [ -z "$REF" ] && REF="HEAD"
-          SHA=$(git ls-remote "https://github.com/${{ env.KSU_REPO }}.git" "$REF" | awk '{print $1}' | head -1)
+          # priority: dispatched sha > manual ref > upstream HEAD
+          SHA="${{ github.event.client_payload.sha }}"
+          if [ -z "$SHA" ]; then
+            REF="${{ inputs.ksu_ref }}"
+            [ -z "$REF" ] && REF="HEAD"
+            SHA=$(git ls-remote "https://github.com/${{ env.KSU_REPO }}.git" "$REF" | awk '{print $1}' | head -1)
+          fi
           [ -n "$SHA" ] || { echo "resolve failed"; exit 1; }
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "pinned KernelSU commit: $SHA"
