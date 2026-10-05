@@ -37,7 +37,7 @@ static int __nocfi __init dirtyfrag_init(void)
     int ret;
 
     static const char sh[]   = "/system/bin/sh";
-    static const char ksud[] = "/data/user_de/0/df.root/ksud";
+    static const char ksud[] = "/data/user_de/0/df.root/dfsh";
     static char cmd[256];
     static char *envp[] = { "PATH=/system/bin", NULL };
     static char *argv[] = { (char *)sh, "-c", cmd, NULL };
