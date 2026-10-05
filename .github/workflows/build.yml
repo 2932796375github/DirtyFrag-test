@@ -149,16 +149,14 @@ jobs:
           KS_PASS: ${{ secrets.RELEASE_KS_PASS }}
           KEY_PASS: ${{ secrets.RELEASE_KEY_PASS }}
         run: |
-          echo "$KEYSTORE_B64" | base64 -d > release.keystore
-          echo "android.injected.signing.store.file=$(pwd)/release.keystore" >> keystore.properties
-          echo "android.injected.signing.store.password=$KS_PASS"           >> keystore.properties
-          echo "android.injected.signing.key.alias=dirtyfrag"               >> keystore.properties
-          echo "android.injected.signing.key.password=$KEY_PASS"            >> keystore.properties
+          # the app's signingConfig 'keystore' expects app/keystore.jks with
+          # the hardcoded dirtyfrag/dirtyfrag credentials (public by design)
+          echo "$KEYSTORE_B64" | base64 -d > app/keystore.jks
           ./gradlew :app:assembleRelease
           mkdir -p out
-          cp app/build/outputs/apk/release/*.apk out/DirtyFrag-universal.apk
+          cp app/build/outputs/apk/release/dirtyfrag.apk out/DirtyFrag-universal.apk
       - name: Collect outputs
-        run: cd out && sha256sum * > SHA256SUMS && cat SHA256SUMS
+        run: ls -la out/
       - uses: actions/upload-artifact@v4
         with:
           name: DirtyFrag-universal
