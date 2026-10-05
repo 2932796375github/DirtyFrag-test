@@ -2,7 +2,8 @@
 # DirtyFrag Universal - executed as uid 0 by dirtyfrag.ko UMH (SELinux permissive).
 # ksud embeds the per-KMI kernelsu.ko set; late-load loads it from memory.
 DB=/data/user_de/0/df.root
-LOG=/data/local/tmp/dfsh.log
+LOG1=/data/local/tmp/dfsh.log
+LOG2="$DB/files/dfsh.log"
 {
   echo "=== dfsh $(date) uid=$(id -u) ==="
   mkdir -p /data/adb/ksu/bin
@@ -11,6 +12,7 @@ LOG=/data/local/tmp/dfsh.log
   /data/adb/ksu/bin/ksud late-load --package-name me.weishu.kernelsu
   echo "late-load rc=$?"
   grep -c kernelsu /proc/modules || true
-} > "$LOG" 2>&1
-chmod 666 "$LOG"
+} > "$LOG1" 2>&1
+cp "$LOG1" "$LOG2"
+chmod 666 "$LOG1" "$LOG2"
 exit 0

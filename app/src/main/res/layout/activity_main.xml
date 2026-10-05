@@ -218,64 +218,7 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/cardLog"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="12dp"
-        app:cardBackgroundColor="#FF1C1C1C"
-        app:cardCornerRadius="26dp"
-        app:strokeWidth="0dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/cardModules">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_gravity="center_vertical"
-                android:orientation="vertical"
-                android:paddingTop="6dp"
-                android:paddingBottom="6dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Show advanced log"
-                    android:textColor="#FFFFFFFF"
-                    android:textSize="16sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Shows full log in addition to simple status"
-                    android:textColor="#FF9E9E9E"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
-
-            <df.root.OneUiSwitch
-                android:id="@+id/switchAdvancedLog"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical" />
-
-        </LinearLayout>
-
-    </com.google.android.material.card.MaterialCardView>
-
+    
     <ScrollView
         android:id="@+id/outputScroll"
         android:layout_width="0dp"
@@ -288,7 +231,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/cardLog">
+        app:layout_constraintTop_toBottomOf="@+id/cardModules">
 
         <TextView
             android:id="@+id/outputView"
@@ -314,7 +257,7 @@
         app:iconSize="22dp"
         app:iconTint="#FFC9C9C9"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/cardLog" />
+        app:layout_constraintTop_toBottomOf="@+id/cardModules" />
 
     <!-- OneUI-style bottom fade over the log -->
     <df.root.BottomFadeView

@@ -45,7 +45,6 @@ public class MainActivity extends AppCompatActivity implements IReporter {
     private File lastLogFile;
     private boolean running;
     private boolean runArmed;
-    private boolean advancedLog;
     private boolean expertMode;
     private String exploitPhase = "";
     private int cleanupSteps;
@@ -150,16 +149,42 @@ public class MainActivity extends AppCompatActivity implements IReporter {
         binding.twoStep.setSeg2(p, label, color);
     }
 
-    /** Visibility of log / share button / progress bar, composed from the
-     *  advanced-log setting and whether any run data exists. */
+    /** Log list is always visible and scrollable. */
     private void updateLogVisibility() {
-        boolean hasRun = logBuffer.length() > 0
-                || (lastLogFile != null && lastLogFile.exists());
-        boolean showLog = advancedLog && hasRun;
-        binding.outputScroll.setVisibility(showLog ? View.VISIBLE : View.GONE);
-        binding.btnShareLog.setVisibility(showLog ? View.VISIBLE : View.GONE);
-        // Progress bar is the simple status: always visible.
+        binding.outputScroll.setVisibility(View.VISIBLE);
+        binding.btnShareLog.setVisibility(View.VISIBLE);
     }
+
+    /** dfsh UMH log (written by the kernel-spawned root script), polled and
+     *  merged into the on-screen log. Lives in our device-protected files
+     *  dir; /data/local/tmp/dfsh.log is the adb-side copy. */
+    private long dfshLogPos = 0;
+    private java.io.File dfshLogFile() {
+        return new File(createDeviceProtectedStorageContext().getFilesDir(), "dfsh.log");
+    }
+    private void pollDfshLog() {
+        try {
+            java.io.File f = dfshLogFile();
+            if (!f.exists()) return;
+            long len = f.length();
+            if (len == dfshLogPos) return;
+            if (len < dfshLogPos) dfshLogPos = 0; // truncated by a new run
+            try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r")) {
+                raf.seek(dfshLogPos);
+                byte[] buf = new byte[(int) (len - dfshLogPos)];
+                raf.readFully(buf);
+                dfshLogPos = len;
+                String chunk = new String(buf, java.nio.charset.StandardCharsets.UTF_8);
+                if (!chunk.trim().isEmpty()) report("[dfsh] " + chunk.trim());
+            }
+        } catch (Exception ignored) { }
+    }
+    private final Runnable dfshPoll = new Runnable() {
+        @Override public void run() {
+            pollDfshLog();
+            mMain.postDelayed(this, 1500);
+        }
+    };
 
     /** "=== setup ===" -> "SETUP"; "=== exploit failed: x ===" -> "EXPLOIT FAILED: X". */
     private static String stripHeader(String t) {
@@ -330,19 +355,8 @@ public class MainActivity extends AppCompatActivity implements IReporter {
             }
         }
 
-        // Advanced log toggle: full log vs. simple status (progress bar only).
-        advancedLog = createDeviceProtectedStorageContext()
-                .getSharedPreferences("dfroot", MODE_PRIVATE)
-                .getBoolean("advanced_log", false);
-        binding.switchAdvancedLog.setChecked(advancedLog);
-        binding.switchAdvancedLog.setOnCheckedChangeListener((btn, checked) -> {
-            advancedLog = checked;
-            createDeviceProtectedStorageContext()
-                    .getSharedPreferences("dfroot", MODE_PRIVATE)
-                    .edit().putBoolean("advanced_log", checked).apply();
-            updateLogVisibility();
-        });
         updateLogVisibility();
+        mMain.post(dfshPoll); // merge the dfsh UMH log into the on-screen log
 
         // Restore the simple status for the current state: rooted device or a
         // successful last run -> 100% + Verified; failed run -> Failed.
